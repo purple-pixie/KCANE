@@ -1,6 +1,6 @@
 import glob
 from pathlib import Path
-
+import itertools
 import random
 import os
 import cv2
@@ -17,6 +17,8 @@ up_buttons = [(letter_width * i + 31, 35) for i in range(5)]
 down_buttons = [(letter_width * i + 31, 116) for i in range(5)]
 #letter_xs = [(letter_width * i, letter_width * (i + 1)) for i in range(5)]
 letter_xs = [letter_width * i for i in range(5)]
+submit_button = (down_buttons[2][0], down_buttons[2][1]+20)
+
 
 
 def random_color():
@@ -76,18 +78,25 @@ def shift_image(image):
     return image
 def get_features(image, flat = True):
     """returns a (1, 23*20) array"""
+    image = cv2.GaussianBlur(255-image, (5, 5), 0)
     _, image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    image = shift_image(image)
-    #im = np.ones((23, 20), dtype=np.uint8) * 255
-    #(_, contours, hierarchy) = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    #for cnt in contours:
-    #    cv2.drawContours(im, [cnt], -1, 0, 1)
+    im = np.zeros((23, 20), dtype=np.uint8)
+    (_, contours, hierarchy) = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    for cnt in contours:
+        cv2.drawContours(im, [cnt], -1, 255, -1)
     #print(f"starts at {contours[0][0]} - len {contours[0].shape}")
-    #image = im
+    #image = shift_image(im)
+    #display(im)
+    image = im
     if flat:
+        #display(im)
         return np.resize(image, (1, 23*20)).astype(np.float32)
     else:
         return image
+
+def increment_letter(robot, pos, after = 0.5):
+    robot.moduleto(*up_buttons[pos])
+    robot.click(before=0.05, after=after)
 
 class Password(Solver):
     def __init__(self, reget_features = True):
@@ -124,7 +133,7 @@ class Password(Solver):
 
     def init_passwords(self):
         with open("data/modules/password/passwords.txt") as pfile:
-            self.passwords = pfile.readlines()
+            self.passwords = [line.rstrip("\n") for line in pfile.readlines()]
     def add_image(self, image, label):
         idx = len(self.images)
         #self.images.append(image)
@@ -150,9 +159,7 @@ class Password(Solver):
                 letter = self.match_letter(im)
                 letters[letter_pos] += [letter]
                 print(f"Letter at pos {letter_pos}, idx {letter_idx} is {letter}")
-                robot.moduleto(*up_buttons[letter_pos])
-                robot.click(before=0.05, after=0.5)
-        print(letters)
+                increment_letter(robot, letter_pos, after=.25)
         return letters
 
     def fake_query_bomb(self):
@@ -164,16 +171,38 @@ class Password(Solver):
                 im = cv2.imread(filenames[letter_pos*6+letter_idx], 0)
                 letters[letter_pos] += self.match_letter(get_letter(im, letter_pos))
         return letters
+
+    def get_solution(self, letters):
+        words = (itertools.product(*letters))
+        for word in words:
+            if "".join(word) in self.passwords:
+                print(f"Password: {''.join(word)}")
+                return word
+        else:
+            print("No valid password found")
+        return ""
+    def apply_solution(self, letters, sol, robot):
+        for pos, char in enumerate(sol):
+                for i in range(letters[pos].index(char)):
+                    increment_letter(robot, pos, after=.1)
+        robot.moduleto(*submit_button)
+        robot.click()
+        print("I am the best")
     def solve(self, robot:robot_arm.RobotArm):
         if robot is None:
             letters = self.fake_query_bomb()
         else:
             letters = self.query_bomb(robot)
-        print(letters)
+        solution = self.get_solution(letters)
+        if not (robot is None):
+            self.apply_solution(letters, solution, robot)
+        #print(letters)
+
     def match_letter(self, image):
         features = get_features(image)
+        #(get_features(image, False))
         ret, result, neighbours, dist = self.knn.findNearest(features, k=1)
-        print (f"distance norm: {dist//1000}")
+        #print (f"distance norm: {dist//1000}")
         return label_from_float(ret)
 
     def identify(self, image, isLCD = False):
@@ -191,7 +220,7 @@ class Password(Solver):
             letters[letter_pos] += [letter]
             print(f"Letter at pos {letter_pos} is {letter}")
             im = cv2.resize(im, None, fx=4,fy=4, interpolation=cv2.INTER_NEAREST)
-            display(im)
+            #display(im)
         print(f"password: {letters}")
         #print(time.time()-t)
         #22,56
