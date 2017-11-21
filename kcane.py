@@ -14,8 +14,10 @@ from auto_canny import auto_canny
 from matplotlib import pyplot as plt
 from PIL import Image
 import pytesseract
-from util import display
+from util import *
 import modules.password
+import modules.memory
+import modules.maze
 
 title_height = 25
 
@@ -95,9 +97,6 @@ def find_bomb(image):
         pass
     display(image)
 
-
-def random_color():
-    return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 def template(im, template, dst = None, threshold = 0.82):
     img_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
     w, h = template.shape[::-1]
@@ -359,9 +358,9 @@ def test_interactive(n=0):
     s = screen.Screen(2)
     #s = screen.Screen(image = cv2.imread("screen/15.bmp"))
     r = RobotArm(s, wake_up=True)
-    pas = modules.password.Password()
+    pas = modules.password.Password(r)
     r.goto(n)
-    pas.solve(r)
+    pas.solve()
 
 import sys
 import inspect
@@ -376,25 +375,40 @@ class PrintSnooper:
         self.stdout.write(s[:100])
         self.stdout.write("\n")
 
-def test_knn():
-    pas = modules.password.Password()
-    pas.solve(None)
+
+def test_memory_saved(n=0):
+    for i in glob.glob("mem/*.*"):
+        im = cv2.imread(i)
+        s=screen.Screen(image=im)
+        r=RobotArm(s)
+        m = modules.memory.Memory(r)
+        print(f"{naked_filename(i)[0]}: , {m.test()}")
+
+def test_memory():
+    s=screen.Screen(2)
+    #s.save_screen("symbols/")
+    r = RobotArm(s)
+    m = modules.memory.Memory(r)
+    m.solve()
+
+def test_maze():
+    #s = screen.Screen(image=cv2.imread("maze/0.bmp"))
+    s = screen.Screen(2)
+    s.save_screen("maze/")
+    r = RobotArm(s)
+    m = modules.maze.Maze(r)
+    #for i in range(9):
+        #m=modules.maze.abstractmaze(i)
+    m.solve()
+
 if __name__ == "__main__":
+    test_maze()
+    #test_memory()
     #sys.stdout=PrintSnooper(sys.stdout)
-    test_password()
+    #'test_password()
     #test_tess()
-    #test_interactive()
-    #test_knn()
-
-
-
-    #read_edge(cv2.imread("screen/2.bmp"), True)
-        # module 5 corners
-        # x1, y1, x2, y2 = (344, 317, 475, 449)
-
-        # module 1 corners
-        #if not keep_showing(im):
-            #break
-
+    ###TODO: detect modules automatically
+    #test_interactive(4)
+    #test_interactive(5)
     #s=screen.Screen(2)
-#print(pytesseract.image_to_string(Image.open("t2.bmp")))
+    #s.save_screen()

@@ -11,7 +11,6 @@ def goto():
     pass
 
 def on_press(key):
-    print(f"{key} pressed!! aborting !!")
     if key == Key.space:
         return False
     return True
@@ -112,7 +111,7 @@ class RobotArm:
         self.mouseto(410, 295)
     def mouseto(self, x, y):
         mouse.position = self.screen.real_coords(x, y)
-      #  print(f"mouse now at {mouse.position}")
+        print(f"mouse now at {mouse.position}")
     def goto(self, mod):
         self.mouseto(*modules[mod])
         self.click(0, 1)
@@ -127,6 +126,7 @@ class RobotArm:
                selected_left:selected_right]
         if not colour:
             return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+        return im
 
     def click(self, before=0, after=0, button=Button.left):
         mouse.press(button)

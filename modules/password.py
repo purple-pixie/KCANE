@@ -70,10 +70,6 @@ def get_features(image, flat = True):
 
 
 class Password(Solver):
-    def increment_letter(self, pos, after=0.5):
-        self.robot.moduleto(*up_buttons[pos])
-        self.robot.click(before=0.05, after=after)
-        self.pointers[pos] = (self.pointers[pos]+1) % 6
     def reset(self):
         self.letters = []
         self.image = None
@@ -85,7 +81,7 @@ class Password(Solver):
         self.labels = np.array([])
         self.pointers = [0, 0, 0, 0, 0]
         for path in glob.glob("data/modules/password/*.bmp"):
-            key = (Path(path).resolve().stem)
+            key = naked_filename(path)
             key = ord(key)-ord("a")
             im = cv2.imread(path, 0)
             splits = im.shape[0] // 23
@@ -124,19 +120,63 @@ class Password(Solver):
             self.images = np.vstack((self.images, image))
             self.labels = np.vstack((self.labels, label))
         self.labelled[label_from_float(label)] = self.labelled.get(label_from_float(label), []) + [idx, ]
+
+    def increment_letter(self, pos, after=0.5):
+        self.robot.moduleto(*up_buttons[pos])
+        self.robot.click(before=0.05, after=after)
+        self.pointers[pos] = (self.pointers[pos] + 1) % 6
+    def decrement_letter(self, pos, after=0.5):
+        self.robot.moduleto(*down_buttons[pos])
+        self.robot.click(before=0.05, after=after)
+        self.pointers[pos] = (self.pointers[pos] - 1) % 6
+    def seek_letter(self, pos, char):
+        #print(f"Looking for {char} from idx {self.pointers[pos]}")
+        if char in self.letters[pos]:
+            target_idx = self.letters[pos].index(char)
+            diff = (self.pointers[pos] - target_idx)
+            #print(f"Found at idx {target_idx} (diff: {diff%6})")
+            if diff % 6 < 3:
+             #   print(f"diff: {diff}, reversing {diff}")
+                for i in range(diff):
+                    self.decrement_letter(pos, after=0.1)
+            else:
+              #  print(f"diff: {diff}, advancing {-diff%6}")
+                for i in range(-diff%6):
+                    self.increment_letter(pos, after=0.1)
+        else:
+            while not self.get_letter_label(pos) == char:
+               # print(f"Looking for {char} (looking at {self.get_letter_label(pos)})")
+                self.increment_letter(pos,after=0.125)
+
+
     def query_bomb(self):
         self.update_image()
+        possibles = self.passwords[:]
         self.letters = [[self.get_letter_label(i, False)] for i in range(5)]
+        soln =self.get_solution(possibles)
+        if soln is not None:
+            return soln
         for letter_pos in range(5):
-            for letter_idx in range(6):
+            for letter_idx in range(5):
+                letters_to_find = ""
+                for p in possibles:
+                    c = p[letter_pos]
+                    if c not in self.letters[letter_pos]:
+                        if c not in letters_to_find:
+                            letters_to_find += c
+                print(f"to find in col {letter_pos}: {letters_to_find}")
+                if len(letters_to_find) == 0:
+                    break
                 self.increment_letter(letter_pos, after=.2)
                 letter = self.get_letter_label(letter_pos)
                 self.letters[letter_pos] += [letter]
                 #print(self.letters)
-                soln =self.get_solution()
+                soln =self.get_solution(possibles)
                 if soln is not None:
                     return soln
-
+            possibles = [p for p in possibles if p[letter_pos] in self.letters[letter_pos]]
+            print(possibles)
+            print(self.letters)
                 #print(f"Letter at pos {letter_pos}, idx {letter_idx} is {letter}")
         return None
 
@@ -150,10 +190,15 @@ class Password(Solver):
                 letters[letter_pos] += self.match_letter(get_letter_region(im, letter_pos))
         return letters
 
-    def get_solution(self):
+    def get_solution(self, possibles = None):
+        if possibles is None:
+            possibles = self.passwords
+        if len(possibles) == 1:
+            print(f"Only one option: {possibles[0]}")
+            return possibles[0]
         words = (itertools.product(*self.letters))
         for word in words:
-            if "".join(word) in self.passwords:
+            if "".join(word) in possibles:
                 print(f"Password: {''.join(word)}")
                 return word
         else:
@@ -162,8 +207,12 @@ class Password(Solver):
         return None
     def apply_solution(self, sol):
         for pos, char in enumerate(sol):
-                for i in range(self.letters[pos].index(char)-self.pointers[pos]):
-                    self.increment_letter(pos, after=.1)
+            self.seek_letter(pos, char)
+                #if char in self.letters[pos]:
+                 #   for i in range(self.letters[pos].index(char)-self.pointers[pos]):
+                 #       self.increment_letter(pos, after=.1)
+                #else:
+                    #need to find the letter first
         self.robot.moduleto(*submit_button)
         self.robot.click()
         print("I am the best")
@@ -174,7 +223,8 @@ class Password(Solver):
             solution = self.query_bomb()
         #solution = self.get_solution(letters)
         if not (self.robot is None):
-            self.apply_solution(solution)
+            if not solution is None:
+                self.apply_solution(solution)
         #print(letters)
     def get_letter_label(self, pos, take_screenshot = True):
         if take_screenshot:
@@ -189,26 +239,15 @@ class Password(Solver):
     def update_image(self):
         if not self.robot is None:
             self.image = get_lcd(self.robot.grab_selected(0))
+            import screen
+            #screen.dump_image(self.image, "lcds/")
     def identify(self, image, isLCD = False):
         #t = time.time()
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         #grab just the LCD screen
         if not isLCD:
             image = get_lcd(image)
-        display(image)
-        letters  = []
-        for letter_pos in range(0,5):
-            #display(scrn)
-            im = get_letter_region(image, letter_pos)
-            letter, im = match_letter(im, resize=0, blur=0 ,thresh=1, cont = 0, detail = 5)
-            letters[letter_pos] += [letter]
-            print(f"Letter at pos {letter_pos} is {letter}")
-            im = cv2.resize(im, None, fx=4,fy=4, interpolation=cv2.INTER_NEAREST)
-            #display(im)
-        print(f"password: {letters}")
-        #print(time.time()-t)
-        #22,56
-        #130, 92
+        return False
 
     def learn(self,image):
         for let in get_letter_regions(image):
@@ -260,3 +299,5 @@ class Password(Solver):
             for pic in pics[1:]:
                 out = np.concatenate((out, self.images[pic]))
             cv2.imwrite(f"data/modules/password/{k}.bmp", out)
+
+
