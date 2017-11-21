@@ -224,7 +224,7 @@ def fun(a):
 
     #print(list(zip(pts, [(0, 0)] + pts[:-1])))
     #display(im, f"{len(list(zip(*x[::- 1])))} screws")
-    #screen.dump_image(im)
+    #dump_image(im)
 
 
 
@@ -292,7 +292,7 @@ def edge_realtime_test():
     s = screen.Screen(2)
     while "Displaying":
         im = read_edge(s.grab())
-        if not keep_showing(im, lambda x: screen.dump_image(x, "edgedumps/")):
+        if not keep_showing(im, lambda x: dump_image(x, "edgedumps/")):
             break
 
 #edge_test()
@@ -321,8 +321,8 @@ def edge_test():
     for im in edges:
         edge = read_edge(im)
         #display(edge)
-        screen.dump_image(im, "screen/edges/")
-        screen.dump_image(edge, "edgedumps/")
+        dump_image(im, "screen/edges/")
+        dump_image(edge, "edgedumps/")
 
 def more_edges():
     im1 = cv2.imread("edgedumps/17.bmp")
