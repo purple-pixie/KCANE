@@ -9,6 +9,21 @@ import random
 import glob
 from pathlib import Path
 
+
+import sys
+import inspect
+
+class PrintSnooper:
+    def __init__(self, stdout):
+        self.stdout = stdout
+    def caller(self):
+        return inspect.stack()[2][3]
+    def write(self, s):
+        self.stdout.write("printed by %s: " % self.caller())
+        self.stdout.write(s[:100])
+        self.stdout.write("\n")
+
+
 def read_key(directions = True):
     key = 256
     while key > 127:
@@ -35,6 +50,20 @@ def read_and_display(*args, **kwargs):
     kwargs["do_wait"] = False
     display(*args, **kwargs)
     return read_key()
+
+
+def keep_showing(x, save_func = None):
+    """show an image and return whether user pressed Q or not
+    if they did, return False (i.e. caller should not keep showing), else True (keep showing)
+    if save_func is provided and user presses S, call save_func on the image"""
+    cv2.imshow("screen",x)
+    key = cv2.waitKey(25) & 0xFF
+    if  key == ord('q'):
+        cv2.destroyAllWindows()
+        return False
+    if save_func and key == ord("s"):
+            save_func(x)
+    return True
 
 
 def naked_filename(path):

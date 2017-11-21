@@ -111,7 +111,7 @@ class RobotArm:
         self.mouseto(410, 295)
     def mouseto(self, x, y):
         mouse.position = self.screen.real_coords(x, y)
-        print(f"mouse now at {mouse.position}")
+        #log#print(f"mouse now at {mouse.position}")
     def goto(self, mod):
         self.mouseto(*modules[mod])
         self.click(0, 1)

@@ -71,7 +71,7 @@ def get_features(image, flat = True):
         return image
 
 class Password(SolverModule):
-    def __init__(self, reget_features = False):
+    def __init__(self, reget_features = True):
         """if reget_features, run get_features on the template images"""
         self.passwords = self.init_passwords()
         self.images: np.array = np.array([])
@@ -106,7 +106,7 @@ class Password(SolverModule):
         self.knn.train(traindata, cv2.ml.ROW_SAMPLE, labels)
 
     def new(self, robot:robot_arm.RobotArm):
-        return PasswordSolver(robot, self.knn)
+        return PasswordSolver(robot, self.knn, self.passwords)
 
     def identify(self, image):
         return False
@@ -128,8 +128,9 @@ class Password(SolverModule):
             return [line.rstrip("\n") for line in pfile.readlines()]
 
 class PasswordSolver(Solver):
-    def __init__(self, robot:robot_arm.RobotArm = None, knn = None):
+    def __init__(self, robot:robot_arm.RobotArm = None, knn = None, passwords = []):
         self.knn = knn
+        self.passwords = passwords
         self.letters = []
         self.image = None
         self.robot = robot
@@ -180,13 +181,14 @@ class PasswordSolver(Solver):
                     if c not in self.letters[letter_pos]:
                         if c not in letters_to_find:
                             letters_to_find += c
-                print(f"to find in col {letter_pos}: {letters_to_find}")
+                #log#print(f"to find in col {letter_pos}: {letters_to_find}")
                 if len(letters_to_find) == 0:
+                    #debug# log no letters left to find this wheel
                     break
                 self.increment_letter(letter_pos, after=.2)
                 letter = self.get_letter_label(letter_pos)
                 self.letters[letter_pos] += [letter]
-                #print(self.letters)
+                #log#debug#print(self.letters)
                 soln =self.get_solution()
                 if soln is not None:
                     return soln
@@ -209,12 +211,12 @@ class PasswordSolver(Solver):
     def get_solution(self):
         """get a password we can make from the currently known letters, or None"""
         if len(self.passwords) == 1:
-            print(f"Only one option: {self.passwords[0]}")
+            #log#print(f"Only one option: {self.passwords[0]}")
             return self.passwords[0]
         words = (itertools.product(*self.letters))
         for word in words:
             if "".join(word) in self.passwords:
-                print(f"Password: {''.join(word)}")
+                #log#print(f"Password: {''.join(word)}")
                 return word
         return None
     def apply_solution(self, sol):
@@ -222,7 +224,7 @@ class PasswordSolver(Solver):
             self.seek_letter(pos, char)
         self.robot.moduleto(*submit_button)
         self.robot.click()
-        print("I am the best")
+        #log#print("I am the best")
     def solve(self):
         solution = None
         if self.robot is None:

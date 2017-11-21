@@ -8,8 +8,8 @@ from util import *
 #======================#
 #useful numbers#
 boundaries = [([0,0,150], [50, 50, 255], "red"),
-              ([30, 100, 30 ], [80, 255, 110], "green"), #green
-              ([180, 180, 180], [255, 255, 255], "white") #white
+              ([30, 100, 30 ], [80, 255, 110], "green"),
+              ([180, 180, 180], [255, 255, 255], "white")
               ]
 
 im_width = 115-30
@@ -51,6 +51,7 @@ def maze_to_image_coords(x, y):
 class Maze(SolverModule):
     def __init__(self):
         self.mazes = np.load("data/modules/maze/mazedump.npy")
+        #log# initialised
     def new(self, robot : robot_arm.RobotArm):
         return MazeSolver(robot, self.mazes)
     def identify(self, image):
@@ -62,7 +63,7 @@ class MazeSolver(Solver):
     def __init__(self, robot : robot_arm.RobotArm, mazes):
         self.robot = robot
         self.update_image()
-        self.maze = None
+        self.maze = -1
         self.start = None
         self.target = None
 
@@ -77,6 +78,8 @@ class MazeSolver(Solver):
             im = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
             ##TODO: sanity check contours - if given a crap image this can divide by zero
             ## Or just give it a try/catch
+            maze_id = -1
+            marker_x, marker_y = (0,0)
             for cnt in cnts:
                 cv2.drawContours(im, [cnt], -1, random_color(), 2)
                 M = cv2.moments(cnt)
@@ -88,10 +91,17 @@ class MazeSolver(Solver):
                 elif title == "white":
                     self.start = (x, y)
                 else:
-                    self.maze = markers[(x, y)]
+                    #check that we aren't being told contradictory information
+                    if maze_id > -1:
+                        if markers[(x, y)] != maze_id:
+                            print(f"Old marker {marker_x, marker_y} says maze id {maze_id}, new marker {x, y} is {markers[(x,y)]}!")
+                    marker_x, marker_y = x, y
+                    maze_id = markers[(x, y)]
+                    self.maze = mazes[maze_id]
 
     def update_image(self):
         module = self.robot.grab_selected()
+        print(module.shape)
         self.image = module[36:36+im_height, 30:30+im_width]
 
     def solve(self):
@@ -109,16 +119,18 @@ class MazeSolver(Solver):
 # but it does, because I wanted drawing functions that look like KTANE mazes
 
 class abstractmaze:
-    def __init__(self, maze = None, start = (0,0), target = (5,5)):
+    def __init__(self, maze, start = (0,0), target = (5,5)):
         self.already_tried = np.zeros((6, 6), dtype=np.bool_)
         self.start = start
         self.target = target
+        if maze is -1:
+            raise IndexError("Not given a maze, nor asked to make one")
         if maze is None:
-            self.hedge_mask=maze[:36].reshape((6, 6))
-            self.vedge_mask=maze[36:].reshape((6, 6))
             self.build_maze()
         else:
-            
+            self.hedge_mask=maze[:36].reshape((6, 6))
+            self.vedge_mask=maze[36:].reshape((6, 6))
+
     def get_solution(self):
         """return a list of steps (as DIR items) to go from start to target"""
         win, path = self.solve_recursive(*self.start)

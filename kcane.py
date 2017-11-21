@@ -1,72 +1,16 @@
 #https://www.reddit.com/r/Python/comments/7cvtc5/whats_everyone_working_on_this_week/dq0i6mw/
 #reply to this guy
 
-import time
-import random
-import logging
-import cv2
+from enum import Enum
 import numpy as np
 import screen
 from robot_arm import RobotArm
-import glob
-import gui
-from auto_canny import auto_canny
-from matplotlib import pyplot as plt
-from PIL import Image
-import pytesseract
 from util import *
 import modules.password
 import modules.memory
 import modules.maze
 
 title_height = 25
-
-        # Press "q" to quit
-
-def open_screen(filename):
-    return cv2.imread(f"screen\\{filename}.bmp")
-
-
-
-
-
-    #cv2.drawContours(image, [screenCnt], -1, (0, 255, 0), 3)
-
-
-
-def get_box(image, x, y, w, h):
-    return image[y:y+h, x:x+w]
-
-
-
-#gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-#gray = cv2.resize(im, (800, 600), interpolation=cv2.INTER_AREA)
-#print(len(np.sum(gray, axis=0)))
-
-def keep_showing(x, save_func = None):
-    cv2.imshow("screen",x)
-    key = cv2.waitKey(25) & 0xFF
-    if  key == ord('q'):
-        cv2.destroyAllWindows()
-        return False
-    if save_func and key == ord("s"):
-            save_func(x)
-    return True
-
-#display(gray)
-
-#cv2.imwrite("gray.bmp", gray )
-#image = cv2.imread("test2.bmp")
-#x = screen_region_from_image(image)
-#im = get_box(image, *x)
-#cv2.imwrite("screen2.bmp", im)
-#display(im)
-
-#record()
-
-#save_screen("half-empty.bmp")
-
-
 
 def find_bomb(image):
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -108,23 +52,6 @@ def template(im, template, dst = None, threshold = 0.82):
     return loc
 
 
-def old_warp():
-    im = open_screen("pic")
-    corners = np.float32([[0, 0], [132, 0], [0, 132], [132, 132]])
-    # module 5 corners
-    # x1, y1, x2, y2 = (344, 317, 475, 449)
-
-    # module 1 corners
-    pts = np.float32([[193, 168], [318, 168], [186, 290], [314, 290]])
-    M = cv2.getPerspectiveTransform(pts,corners)
-    warped = cv2.warpPerspective(im,M,(132,132))
-    #cv2.rectangle(im, (x1, y1), (x2, y2), color=(0,0,255))
-    x1, y1 = pts[0]
-    x1, y1 = int(x1), int(y1)
-    cropped = im[y1:y1+132,x1:x1+132]
-    display(np.concatenate((cropped, warped), axis=0))
-
-
 #s = screen.Screen(2)
 #x=RobotArm(s)
 
@@ -143,49 +70,6 @@ def centre_cols(im):
 def centre_rows(im):
     return im[160:420]
 screw = cv2.imread("templates/screw.bmp", 0)
-import decimal
-def find_screws_old(im, dst = None):
-    #for im in glob.glob("screen/*.bmp"):
-    x=template(im, screw)
-    pts = np.array(sorted(zip(*x[::-1]), key=np.product ))
-    if len(pts) == 0:
-        return [], []
-    pts = pts + (len(screw)//2, len(screw[0])//2)
-    if not dst is None:
-        #cv2.drawContours(dst, [pts], -1, (0, 255, 0), 3)
-        rect = cv2.minAreaRect(pts)
-        box = cv2.boxPoints(rect)
-        box = np.int0(box)
-        cv2.drawContours(dst, [box], 0, (0, 0, 255), 2)
-    last = pts[0]
-    definite = []
-    maybe = []
-    is_definite = False
-    for i in range(len(pts)-1):
-        current = pts[i+1]
-        diff = np.sum(current) - np.sum(last)
-        if np.sum(cv2.absdiff(current, last)) < 5:
-            is_definite = True
-        else:
-            if is_definite:
-                definite.append(last)
-                is_definite = False
-            else:
-                maybe.append(last)
-            last = current
-    if is_definite:
-        definite.append(last)
-    else:
-        maybe.append(last)
-    #print(f"definite: {definite}, \n maybe: {maybe}")
-    h,w = screw.shape
-    if dst is not None:
-        for d in definite:
-            cv2.rectangle(dst, tuple(d), tuple(d+screw.shape), (0, 255, 0), 2)
-        for d in maybe:
-            cv2.rectangle(dst, tuple(d), tuple(d + screw.shape), (0, 0, 255), 2)
-    return definite, maybe
-
 
 def find_screws(im, dst = None):
     #for im in glob.glob("screen/*.bmp"):
@@ -211,20 +95,6 @@ def find_screws(im, dst = None):
             cv2.rectangle(dst, tuple(d), tuple(d+screw.shape), (0, 255, 0), 2)
     return out
 
-
-def round_proper(a):
-    return int(decimal.Decimal(a).quantize(decimal.Decimal('1'),
-                                    rounding=decimal.ROUND_HALF_UP))
-
-def fun(a):
-    a, b = a
-    val = round_proper(a/10) * round_proper(b/10)
-    #print(f"{a} {round(a[0] / 10)} * {round(a[1] / 10)} = {val}")
-    return val
-
-    #print(list(zip(pts, [(0, 0)] + pts[:-1])))
-    #display(im, f"{len(list(zip(*x[::- 1])))} screws")
-    #dump_image(im)
 
 
 
@@ -305,9 +175,7 @@ def thresh_test():
     temp = cv2.imread("templates/AA.bmp", 0)
     temp = cv2.resize(temp, (66, 178), interpolation=cv2.INTER_CUBIC)
     _,can = cv2.threshold(temp,_,255,cv2.THRESH_BINARY)
-    #can = auto_canny(temp)
     #cv2.imwrite("resize.bmp", temp)
-    #can = auto_canny(im)
     display(can)
     template(im, temp, True, threshold=0.5)
     display(im)
@@ -331,84 +199,25 @@ def more_edges():
     display(im2)
 
 
-def test_password():
-    #image = cv2.imread("lcds/50.bmp")
-    for i in glob.glob("lcds/*.bmp"):
-        pas = modules.password.Password()
-        image = cv2.imread(i, 0)
-        pas.train(image)
-    #image =auto_canny(image)
-    #image=cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
-    #s = screen.Screen(image=cv2.imread("screen/OCGYA.bmp"))
-    #s = screen.Screen(2)
-    #s.save_screen()
-    #r =RobotArm(s)
-    #mod = r.grab_selected()
-    #cv2.imwrite("module.bmp", mod)
-    #print(cv2.__version__)
-    #pas.identify(image, True)
 
-def test_tess():
-    for filename in [1]: #glob.glob("letters/*.bmp"):
-        let = pytesseract.image_to_string(Image.open("letters/32.bmp"), config="-psm 10 letters")
-        print(let)
-        #cv2.imwrite(filename, im)
-import threading
-def test_interactive(n=0):
-    s = screen.Screen(2)
-    #s = screen.Screen(image = cv2.imread("screen/15.bmp"))
-    r = RobotArm(s, wake_up=True)
-    pas = modules.password.Password(r)
-    r.goto(n)
-    pas.solve()
+class SOLVER(Enum):
+    Password = 0
+    Maze = 1
+    Memory = 2
 
-import sys
-import inspect
-
-class PrintSnooper:
-    def __init__(self, stdout):
-        self.stdout = stdout
-    def caller(self):
-        return inspect.stack()[2][3]
-    def write(self, s):
-        self.stdout.write("printed by %s: " % self.caller())
-        self.stdout.write(s[:100])
-        self.stdout.write("\n")
-
-
-def test_memory_saved(n=0):
-    for i in glob.glob("mem/*.*"):
-        im = cv2.imread(i)
-        s=screen.Screen(image=im)
-        r=RobotArm(s)
-        m = modules.memory.Memory(r)
-        print(f"{naked_filename(i)[0]}: , {m.test()}")
-
-def test_memory():
-    s=screen.Screen(2)
-    #s.save_screen("symbols/")
-    r = RobotArm(s)
-    m = modules.memory.Memory(r)
-    m.solve()
-
-def test_maze():
-    #s = screen.Screen(image=cv2.imread("maze/0.bmp"))
-    s = screen.Screen(2)
-    s.save_screen("maze/")
-    r = RobotArm(s)
-    m = modules.maze.Maze(r)
-    #for i in range(9):
-        #m=modules.maze.abstractmaze(i)
-    m.solve()
+def init_solvers():
+    solvers = {}
+    solvers[SOLVER.Password] = modules.password.Password()
+    solvers[SOLVER.Maze] = modules.maze.Maze()
+    solvers[SOLVER.Memory] = modules.memory.Memory()
+    return solvers
 
 if __name__ == "__main__":
-    test_maze()
-    #test_memory()
-    #sys.stdout=PrintSnooper(sys.stdout)
-    #'test_password()
-    #test_tess()
     ###TODO: detect modules automatically
-    #test_interactive(4)
-    #test_interactive(5)
-    #s=screen.Screen(2)
-    #s.save_screen()
+    solvers = init_solvers()
+    print(solvers)
+    s = screen.Screen(2)
+    r = RobotArm(s)
+    pw = solvers[SOLVER.Password].new(r)
+    pw.solve()
+
