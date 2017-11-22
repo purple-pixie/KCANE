@@ -25,7 +25,8 @@ submit_button = (down_buttons[2][0], down_buttons[2][1]+20)
 
 #======================#
 #Helper functions#
-
+def pixel_centre(x, y):
+    return (int(3 + np.floor(x * 3.5)), int(3 + np.floor(y * 3.5)))
 def get_lcd(module_image):
     return module_image[59:92,21:]
 def get_letter_region(lcd_image, pos):
@@ -37,7 +38,7 @@ def get_letter_regions(lcd_image):
 
 #convert between character identifiers and floating-point values (for the KNN)
 def label_as_float(label):
-    return float(ord(label)-ord("a"))
+    return (ord(label)-ord("a"))
 
 def label_from_float(label):
     return chr(int(label)+ord("a"))
@@ -54,29 +55,24 @@ def shift_image(image):
 def get_features(image, flat = True):
     """convert an image into a vector of its features
     if flat, return it flattened"""
-    image = cv2.GaussianBlur(255-image, (5, 5), 0)
-    _, image = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    im = np.zeros((23, 20), dtype=np.uint8)
-    (_, contours, hierarchy) = cv2.findContours(image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    for cnt in contours:
-        cv2.drawContours(im, [cnt], -1, 255, -1)
-    #print(f"starts at {contours[0][0]} - len {contours[0].shape}")
-    #image = shift_image(im)
-    #display(im)
-    image = im
-    if flat:
-        #display(im)
-        return np.resize(image, (1, 23*20)).astype(np.float32)
-    else:
-        return image
+    im = np.zeros((5,5),np.uint8)
+    _, a = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    for y in range(5):
+        for x in range(5):
+            xx, yy = pixel_centre(x, y)
+            if a[yy][xx] > 120:
+                im[y, x] = 255
+
+    #display(cv2.resize(im, (100, 100), interpolation=cv2.INTER_NEAREST))
+    return im.ravel('F').astype(np.float32)
 
 class Password(SolverModule):
     def __init__(self, reget_features = True):
         """if reget_features, run get_features on the template images"""
         self.passwords = self.init_passwords()
-        self.images: np.array = np.array([])
+        self.traindata: np.array = np.array([])
         self.labelled = {}
-        self.labels = np.array([])
+        self.labels = np.array([], dtype=np.float32)
         #log#print("Reading password training data")
         for path in glob.glob("data/modules/password/*.bmp"):
             key = naked_filename(path)
@@ -96,14 +92,13 @@ class Password(SolverModule):
 
         #log#print("Training KNN")
         self.knn = cv2.ml.KNearest_create()
-        # why does np.resize(self.images, (-1, 460)) drop the last item?
-        # do it manually, work out why I'm being stupid later (it's 99% me being stupid, not numpy doing it)
-        rows = np.prod(self.images.shape) // 460
-        traindata = np.resize(self.images, (rows, 460)).astype(np.float32)
-        test = traindata[-1]
-        test = np.resize(test, (23, 20))
-        labels = self.labels.astype(np.float32)
-        self.knn.train(traindata, cv2.ml.ROW_SAMPLE, labels)
+        print(f"hmmm {self.traindata[-1].shape}")
+        #print(self.labels.type())
+        import time
+        time.sleep(1)
+        self.knn.train(self.traindata.astype(np.float32), cv2.ml.COL_SAMPLE, self.labels.astype(np.float32))
+
+        ret, result, neighbours, dist = self.knn.findNearest(self.traindata[-1].astype(np.float32), k=1)
 
     def new(self, robot:robot_arm.RobotArm):
         return PasswordSolver(robot, self.knn, self.passwords)
@@ -112,20 +107,25 @@ class Password(SolverModule):
         return False
 
     def add_image(self, image, label):
-        idx = len(self.images)
-        #self.images.append(image)
+        idx = len(self.traindata)
         if idx == 0:
-            self.images = image.copy()
-            self.labels = np.array([label])
+            self.traindata = image.copy()
+            self.labels = np.array([label], dtype=np.float32)
         else:
-            self.images = np.vstack((self.images, image))
+            if len(self.traindata.shape) == 1:
+                idx = 1
+            self.traindata = np.vstack((self.traindata, image))
             self.labels = np.vstack((self.labels, label))
         self.labelled[label_from_float(label)] = self.labelled.get(label_from_float(label), []) + [idx, ]
 
 
     def init_passwords(self):
-        with open("data/modules/password/passwords.txt") as pfile:
-            return [line.rstrip("\n") for line in pfile.readlines()]
+        try:
+            with open("data/modules/password/passwords.txt") as pfile:
+                return [line.rstrip("\n") for line in pfile.readlines()]
+        except:
+            with open("h:/programming/kcane/data/modules/password/passwords.txt") as pfile:
+                return [line.rstrip("\n") for line in pfile.readlines()]
 
 class PasswordSolver(Solver):
     def __init__(self, robot:robot_arm.RobotArm = None, knn = None, passwords = []):
@@ -138,11 +138,11 @@ class PasswordSolver(Solver):
 
     def increment_letter(self, pos, after=0.5):
         self.robot.moduleto(*up_buttons[pos])
-        self.robot.click(before=0.05, after=after)
+        #self.robot.click(before=0.05, after=after)
         self.pointers[pos] = (self.pointers[pos] + 1) % 6
     def decrement_letter(self, pos, after=0.5):
         self.robot.moduleto(*down_buttons[pos])
-        self.robot.click(before=0.05, after=after)
+        #self.robot.click(before=0.05, after=after)
         self.pointers[pos] = (self.pointers[pos] - 1) % 6
     def seek_letter(self, pos, char):
         """cycle letter at position pos until it shows char
@@ -174,7 +174,7 @@ class PasswordSolver(Solver):
         if soln is not None:
             return soln
         for letter_pos in range(5):
-            for letter_idx in range(5):
+            for letter_idx in range(6):
                 letters_to_find = ""
                 for p in self.passwords:
                     c = p[letter_pos]
@@ -223,7 +223,7 @@ class PasswordSolver(Solver):
         for pos, char in enumerate(sol):
             self.seek_letter(pos, char)
         self.robot.moduleto(*submit_button)
-        self.robot.click()
+        #self.robot.click()
         #log#print("I am the best")
     def solve(self):
         solution = None
@@ -244,13 +244,14 @@ class PasswordSolver(Solver):
     def match_letter(self, image):
         """get the label for the given image of a letter"""
         features = get_features(image)
+        print(features)
         ret, result, neighbours, dist = self.knn.findNearest(features, k=1)
         return label_from_float(ret)
     def update_image(self):
         if not self.robot is None:
             self.image = get_lcd(self.robot.grab_selected(0))
-            import screen
             #dump_image(self.image, "lcds/")
+            #self.image = cv2.imread(next(self.ims), 0)
 
     #below is all legacy training code. Likely doesn't even work any more but it might be re-purposed usefully
     #(the Password/PasswordSolver split hadn't happened when this was written,

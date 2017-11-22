@@ -89,17 +89,22 @@ def contour(image):
     (im, contours, hierarchy) = cv2.findContours(image,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
     return contours
 
-def get_dump_name(dir="dump/", ext=".bmp", starts=""):
+def get_dump_name(dir="dump/", ext="bmp", starts=""):
     if "." in ext:
         ext = ext.lstrip(".")
-    hits = len(glob.glob(f"{dir}{starts}*.{ext}"))
-    if hits == 0:
-        hits = ""
-    return f"{dir}{starts}{hits}.{ext}"
+    if starts == "":
+        starts = "dump"
+    starts = os.path.join(dir, starts)
+    hits = 0
+    path = f"{starts}{hits}.{ext}"
+    while os.path.isfile(path):
+        hits += 1
+        path = f"{starts}{hits}.{ext}"
+    return path
 
 
-def dump_image(img, dir="test/", announce = True):
-        filename = get_dump_name(dir, "bmp")
+def dump_image(img, dir="test/", announce = True, starts = "img"):
+        filename = get_dump_name(dir, "bmp", starts)
         if announce:
                 print(f"dumping to {filename}")
         cv2.imwrite(filename, img)

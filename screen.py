@@ -6,7 +6,7 @@ from util import *
 
 screen_width = 800
 screen_height = 600
-class Screen:
+class Screen():
     def __init__(self, monitor = 0, image = None):
         if not image is None:
             self.sct = None
@@ -20,16 +20,15 @@ class Screen:
 
             self.xscale = 1
             self.yscale = 1
-            with mss.mss() as a:
-                self.monitor = dict(a.monitors[2])
+            self.monitor = {"top": 0, "left": 0, "width": image.shape[1], "height": image.shape[0]}
             return
         self.image = None
         if monitor != 2:
             print("Not currently sure how to deal with monitors other than 2")
             raise IOError("Not currently sure how to deal with monitors other than 2")
         self.sct = mss.mss()
+        #clone monitor - we don't want to mess with mss's own monitors dict
         monitor = dict(self.sct.monitors[monitor])
-        print(self.sct.monitors[2])
         image = np.array(self.sct.grab(monitor))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         cols = np.sum(image, axis=0)

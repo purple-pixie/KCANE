@@ -10,12 +10,12 @@ class Solver(abc.ABC):
     def solve(self):
         """solve the module. assumes it is already selected"""
         return
+    def update_image(self):
+        self.image = self.robot.grab_selected()
 
 class SolverModule(abc.ABC):
     """oversees all the solving of instances of the module class"""
-    @abc.abstractmethod
-    def __init__(self):
-        return
+
     @abc.abstractmethod
     def new(self, robot:robot_arm.RobotArm)-> Solver:
         """return a solver for a new instance of this module
