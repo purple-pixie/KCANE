@@ -7,8 +7,6 @@ import threading
 
 mouse = Controller()
 
-def goto():
-    pass
 
 def on_press(key):
     if key == Key.space:
@@ -50,6 +48,9 @@ class RobotArm:
     def __init__(self, screen, wake_up = False):
         self.screen = screen
         self.state = state.NEUTRAL
+
+        #listen for the user pressing space
+        #if they ever do, quit out next time we're asked to sleep
         listen = Listener(on_press=on_press, on_release=on_release)
         listen.start()
         if wake_up:
@@ -61,6 +62,10 @@ class RobotArm:
             self.state = state.INACTIVE
             self.pick_up()
             self.state = state.ACTIVE
+
+    def panic(self, dir = "screens/"):
+        self.screen.save_screen(dir)
+
     def examine_gubbins(self):
         self.mouse_to_centre()
         for i in range(4):
@@ -122,10 +127,14 @@ class RobotArm:
     def grab_selected(self, colour = True):
         """grab a screenshot of the active module"""
         im = self.screen.grab()
-        im = im[selected_top:selected_bot,
-               selected_left:selected_right]
+        if im.shape[0] >= selected_bot:
+            im = im[selected_top:selected_bot,
+                   selected_left:selected_right]
         if not colour:
-            return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            if len(im.shape) > 2:
+                return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+            else:
+                return im
         return im
 
     def click(self, before=0, after=0, button=Button.left):

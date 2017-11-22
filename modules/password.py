@@ -11,6 +11,9 @@ from PIL import Image
 import robot_arm
 from modules.solver import Solver, SolverModule
 from util import *
+import logging
+log = logging.getLogger(__name__)
+
 
 #======================#
 #Useful Numbers#
@@ -28,7 +31,10 @@ submit_button = (down_buttons[2][0], down_buttons[2][1]+20)
 def pixel_centre(x, y):
     return (int(3 + np.floor(x * 3.5)), int(3 + np.floor(y * 3.5)))
 def get_lcd(module_image):
-    return module_image[59:92,21:]
+    if module_image.shape[0] >= 92:
+        return module_image[59:92,21:]
+    else:
+        return module_image
 def get_letter_region(lcd_image, pos):
     x1 = letter_xs[pos]
     return lcd_image[7:30, x1:x1 + 20]
@@ -49,24 +55,67 @@ def shift_image(image):
     min1 = np.argmin(image, axis=0) > 0
     pixels_removed =np.argmax(min1)
     image = np.lib.pad(image[:,pixels_removed:], ((0,0),(0, pixels_removed)), 'constant', constant_values=255)
-    #display(np.vstack((im1, image)))
+    return image
+def offset(image, x, y):
+    #offset x:
+    x1 = 0
+    lpadx = 0
+    rpadx = 0
+    if x < 0:
+        x1 = -x
+        lpadx, rpadx = (0, -x)
+    elif x > 0:
+        x1 = x
+        lpadx, rpadx = x, 0
+    if x1 != 0:
+        image = np.lib.pad(image[:, x1:], ((0, 0), (lpadx, rpadx)), 'constant', constant_values=255)
+
+    y1 = 0
+    lpady = 0
+    rpady = 0
+    if y < 0:
+        y1 = -y
+        lpady, rpady = (0, -y)
+    elif y > 0:
+        y1 = y
+        lpady, rpady = y, 0
+    if y1 != 0:
+        image = np.lib.pad(image[y1:,:], ((lpady, rpady), (0, 0)), 'constant', constant_values=255)
     return image
 
+def flat_vector(features):
+    return features.ravel("F").astype(np.float32)
+
 def get_features(image, flat = True):
+    #TODO: Determine where each pixel is more sensibly
+    #loop through each column and determine if it looks like a real column
+    #compare with column to the left
     """convert an image into a vector of its features
     if flat, return it flattened"""
-    im = np.zeros((5,5),np.uint8)
+    im = np.zeros((6,5),np.uint8)
     _, a = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    for y in range(5):
+    #a = shift_image(a)
+    for y in range(6):
         for x in range(5):
             xx, yy = pixel_centre(x, y)
             if a[yy][xx] > 120:
                 im[y, x] = 255
-
-    #display(cv2.resize(im, (100, 100), interpolation=cv2.INTER_NEAREST))
-    return im.ravel('F').astype(np.float32)
+    if flat:
+        return flat_vector(im)
+    else:
+        return im
 
 class Password(SolverModule):
+
+    def supervise(self, orig, key):
+        key = label_from_float(key)
+        print(f"Learn: {key}?")
+        display(orig)
+        k = read_and_display((cv2.resize(get_features(orig, False), (100,100), interpolation=cv2.INTER_NEAREST)))
+        if k == ord("y"):
+            cv2.imwrite(f"letters/{key}.bmp", orig)
+
+
     def __init__(self, reget_features = True):
         """if reget_features, run get_features on the template images"""
         self.passwords = self.init_passwords()
@@ -81,24 +130,10 @@ class Password(SolverModule):
                 continue
             key = ord(key) - ord("a")
             im = cv2.imread(path, 0)
-            splits = im.shape[0] // 23
-            # print (len(np.vsplit(im, splits)))
-            for im in np.vsplit(im, splits):
-                if reget_features:
-                    im = get_features(im, False)
-                else:
-                    im = shift_image(im)
-                self.add_image(im, key)
+            self.add_image(flat_vector(im), key)
 
-        #log#print("Training KNN")
         self.knn = cv2.ml.KNearest_create()
-        print(f"hmmm {self.traindata[-1].shape}")
-        #print(self.labels.type())
-        import time
-        time.sleep(1)
-        self.knn.train(self.traindata.astype(np.float32), cv2.ml.COL_SAMPLE, self.labels.astype(np.float32))
-
-        ret, result, neighbours, dist = self.knn.findNearest(self.traindata[-1].astype(np.float32), k=1)
+        self.knn.train(self.traindata.astype(np.float32), cv2.ml.ROW_SAMPLE, self.labels.astype(np.float32))
 
     def new(self, robot:robot_arm.RobotArm):
         return PasswordSolver(robot, self.knn, self.passwords)
@@ -138,11 +173,11 @@ class PasswordSolver(Solver):
 
     def increment_letter(self, pos, after=0.5):
         self.robot.moduleto(*up_buttons[pos])
-        #self.robot.click(before=0.05, after=after)
+        self.robot.click(before=0.05, after=after)
         self.pointers[pos] = (self.pointers[pos] + 1) % 6
     def decrement_letter(self, pos, after=0.5):
         self.robot.moduleto(*down_buttons[pos])
-        #self.robot.click(before=0.05, after=after)
+        self.robot.click(before=0.05, after=after)
         self.pointers[pos] = (self.pointers[pos] - 1) % 6
     def seek_letter(self, pos, char):
         """cycle letter at position pos until it shows char
@@ -153,18 +188,27 @@ class PasswordSolver(Solver):
             diff = (self.pointers[pos] - target_idx)
             #print(f"Found at idx {target_idx} (diff: {diff%6})")
             if diff % 6 < 3:
-             #   print(f"diff: {diff}, reversing {diff}")
-                for i in range(diff):
+                print(f"diff: {diff}, reversing {diff % 6}")
+                for i in range(diff % 6):
                     self.decrement_letter(pos, after=0.1)
             else:
-              #  print(f"diff: {diff}, advancing {-diff%6}")
+                print(f"diff: {diff}, advancing {-diff%6}")
                 for i in range(-diff%6):
                     self.increment_letter(pos, after=0.1)
         else:
             #TODO remove naked while loop - needs to build up a list for this wheel and make sure we aren't stuck
-            while not self.get_letter_label(pos) == char:
-               # print(f"Looking for {char} (looking at {self.get_letter_label(pos)})")
-                self.increment_letter(pos,after=0.125)
+            looking_at = self.get_letter_label(pos)
+            for i in range(6):
+                log.info(f"Looking for {char} (looking at {looking_at})")
+                self.robot.panic("letters/")
+                if looking_at == char: # or looking_at == None:
+                    return
+                self.increment_letter(pos,after=0.3)
+                looking_at = self.get_letter_label(pos)
+                print(f"now: {looking_at}")
+            print(f"Failed to find {char}!")
+            print(self.letters)
+            raise IOError(f"Could not find {char}")
 
 
     def query_bomb(self):
@@ -199,14 +243,18 @@ class PasswordSolver(Solver):
         return None
 
     def fake_query_bomb(self):
-        filenames = list(glob.glob("lcds/*.bmp"))
-        assert len(filenames) == 30
-        letters = [[], [], [], [], []]
-        for letter_pos in range(5):
-            for letter_idx in range(6):
-                im = cv2.imread(filenames[letter_pos*6+letter_idx], 0)
-                letters[letter_pos] += self.match_letter(get_letter_region(im, letter_pos))
-        return letters
+        filenames = list(glob.glob("lcds/solved/*.bmp"))
+        for filename in filenames:
+            self.image = cv2.imread(filename, 0)
+            for pos in range(5):
+                im = get_letter_region(self.image, pos)
+                key = filename.split("\\")[1]
+                let = self.match_letter(im)
+                if let is None:
+                    print(f"picnic time | {filename} ({pos})")
+                    display(get_features(im, False), scale=15)
+                #display(im, scale=10)
+
 
     def get_solution(self):
         """get a password we can make from the currently known letters, or None"""
@@ -223,9 +271,10 @@ class PasswordSolver(Solver):
         for pos, char in enumerate(sol):
             self.seek_letter(pos, char)
         self.robot.moduleto(*submit_button)
-        #self.robot.click()
+        self.robot.click()
         #log#print("I am the best")
     def solve(self):
+        #self.robot.screen.save_screen("fail/")
         solution = None
         if self.robot is None:
             letters = self.fake_query_bomb()
@@ -241,11 +290,32 @@ class PasswordSolver(Solver):
         if take_screenshot:
             self.update_image()
         return self.match_letter(get_letter_region(self.image, pos))
-    def match_letter(self, image):
+    def match_letter(self, image, centred = True):
         """get the label for the given image of a letter"""
         features = get_features(image)
-        print(features)
-        ret, result, neighbours, dist = self.knn.findNearest(features, k=1)
+        ret, result, neighbours, dist = self.knn.findNearest(features.reshape(1,30), k=1)
+        #debug#
+        if not centred:
+            if dist == 0:
+                #debug
+                #print(f"accepted: {label_from_float(ret)}")
+                #display(image, scale=15)
+                return ret
+            #debug
+            #print(f"not accepting: {label_from_float(ret)}")
+            return None
+        if dist > 0 and centred:
+            #debug
+            #print(f"disputing {label_from_float(ret)}")
+            for xoff in range(-2, 3):
+                for yoff in range(-2,3):
+                    ret = self.match_letter(offset(image, xoff, yoff), centred=False)
+                    if ret is not None:
+                        log.debug(f"Found {label_from_float(ret)} at: {xoff, yoff}")
+                        return label_from_float(ret)
+            #didn't find by recentring
+            #picnic
+            return None
         return label_from_float(ret)
     def update_image(self):
         if not self.robot is None:

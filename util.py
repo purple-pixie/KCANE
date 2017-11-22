@@ -23,6 +23,9 @@ class PrintSnooper:
         self.stdout.write(s[:100])
         self.stdout.write("\n")
 
+def images_in(dir = "", flags=1, ext = ".bmp"):
+    for im in glob.glob(f"{dir}*{ext}"):
+        yield cv2.imread(im, flags)
 
 def read_key(directions = True):
     key = 256

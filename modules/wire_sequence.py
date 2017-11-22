@@ -93,9 +93,9 @@ class SequenceSolver(Solver):
     def solve(self):
         for panel in range(4):
             for wire in self.get_cuts():
-                logging.info(f"cutting {wire+1}")
+                log.info(f"cutting {wire+1}")
                 self.cut_wire(wire)
-            logging.info(f"next panel")
+            log.info(f"next panel")
             self.next_panel()
 
     def get_cuts(self):
@@ -117,7 +117,7 @@ class SequenceSolver(Solver):
                             log.warning(f"Found {(color, term)}, already have {panel[start]} for {start} {line[0]}")
                             dump_image(image, "fail/")
                     panel[start] = (color, term)
-                    logging.debug(f"({x1}, {y1}, {x2}, {y2}): {start} -> {term} ({color})")
+                    log.debug(f"({x1}, {y1}, {x2}, {y2}): {start} -> {term} ({color})")
         for start in sorted(panel.keys()):
             color, term = panel[start]
             cut = self.test_wire(color, term)
