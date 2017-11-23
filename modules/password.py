@@ -137,8 +137,11 @@ class Solver():
     def new(self, robot:robot_arm.RobotArm):
         return PasswordSolver(robot, self.knn, self.passwords)
 
-    def identify(self, image):
-        return True
+    def identify(self, robot):
+        test = PasswordSolver(robot, self.knn, self.passwords)
+        test.update_image()
+        labels = [test.get_letter_label(i, False) for i in range(5)]
+        return any(labels)
 
     def add_image(self, image, label):
         idx = len(self.traindata)
@@ -317,8 +320,7 @@ class PasswordSolver():
             return None
         return label_from_float(ret)
     def update_image(self):
-        if not self.robot is None:
-            self.image = get_lcd(self.robot.grab_selected(0))
+        self.image = get_lcd(self.robot.grab_selected(0))
             #dump_image(self.image, "lcds/")
             #self.image = cv2.imread(next(self.ims), 0)
 

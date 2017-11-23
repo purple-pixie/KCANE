@@ -31,19 +31,11 @@ selected_bot = 378
 selected_left = 330
 selected_right = 496
 
-def sleep(dur: float, abort=True):
-    #seconds to milis
-    if abort:
-        if threading.active_count() < 2:
-            print(f"key: {threading.active_count()} aborting")
-            raise KeyboardInterrupt("User aborted")
-    time.sleep(dur)
-
 
 class RobotArm:
-    def __init__(self, screen, wake_up = False):
+    def __init__(self, screen, wake_up = False, window_name = None):
         self.screen = screen
-
+        self.window_name = window_name
         #listen for the user pressing space
         #if they ever do, quit out next time we're asked to sleep
         listen = Listener(on_press=on_press, on_release=on_release)
@@ -67,7 +59,7 @@ class RobotArm:
             if dump: dump_image(s, starts=f"mod{mod}_")
             yield bomb_examiner.find_highlight(s)
 
-    def examine_gubbins(self):
+    def get_edges(self):
         for i in range(4):
             self.rotate(i)
             #self.screen.save_screen()
@@ -135,19 +127,20 @@ class RobotArm:
         #self.mouse_to_centre()
     def moduleto(self, x, y):
         self.mouseto(x + selected_left, y + selected_top)
+
     def grab(self, colour = True):
-        self.screen.grab(colour)
-    def grab_selected(self, colour = True):
-        """grab a screenshot of the active module"""
-        im = self.grab()
-        if im.shape[0] >= selected_bot:
-            im = im[selected_top:selected_bot,
-                   selected_left:selected_right]
+        #todo: lights out
+        im = self.screen.grab()
         if not colour:
             if len(im.shape) > 2:
                 return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
-            else:
-                return im
+        return im
+    def grab_selected(self, colour = True):
+        """grab a screenshot of the active module"""
+        im = self.grab(colour)
+        if im.shape[0] >= selected_bot:
+            im = im[selected_top:selected_bot,
+                   selected_left:selected_right]
         return im
 
     def click(self, before=0., after=0., button=Button.left):
@@ -160,5 +153,7 @@ class RobotArm:
     def rclick(self, **kwargs):
         self.click(button=Button.right, **kwargs)
 
-    def draw(self, image):
+    def draw_module(self, image):
         im=self.grab()
+        canvas = im[selected_top:selected_bot,
+                   selected_left:selected_right]

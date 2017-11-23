@@ -11,8 +11,7 @@ boundaries = [([0,0,150], [50, 50, 255], "red"),
               ([180, 180, 180], [255, 255, 255], "white")
               ]
 
-im_width = 115-30
-im_height = 120-36
+im_width, im_height = 84, 84
 
 buttons = [(74, 16), (135, 75), (74, 142), (10, 76)]
 
@@ -44,6 +43,10 @@ def image_to_maze_coords(x, y):
 def maze_to_image_coords(x, y):
     return np.array((x * 14 + 7, y * 14 + 7))
 
+def hline(dst, x, y, color = (0,0,0)):
+    cv2.line(dst, (14 * x, 14 * (y + 1)), (14 * (x + 1), 14 * (y + 1)), color, 2)
+def vline(dst, x, y, color = (0,0,0)):
+    cv2.line(dst, (14 * (x + 1), 14 * y), (14 * (x + 1), 14 * (y + 1)), color, 2)
 
 #======================#
 #Parent solver
@@ -53,8 +56,27 @@ class Solver():
         #log# initialised
     def new(self, robot : robot_arm.RobotArm):
         return MazeSolver(robot, self.mazes)
-    def identify(self, image):
-        return False
+    def identify(self, robot: robot_arm.RobotArm):
+        image = robot.grab_selected()[36:36+im_height, 30:30+im_width]
+        import itertools
+        #there's bound to be an elegant way to do this without for loops
+        #right now I can't think of it
+        maze_id = -1
+        marks = []
+        for x, y in itertools.product(range(6), range(6)):
+            im = image[14 * y:14 * (y + 1), 14 * x:14 * (x + 1)]
+            green = np.sum(im[:,:,1]>150)
+            if green > 25:
+                marks.append((x, y))
+                if len(marks) > 2:
+                    return False
+        if len(marks) != 2:
+            return False
+        #we found exactly two markers ... still, we should make sure they are in valid places
+        if marks[0] not in markers or marks[1] not in markers:
+            return False
+        #they both were. Let's just make sure they both match the same maze
+        return markers[marks[0]] == markers[marks[1]]
 
 #======================#
 #solver proper
@@ -100,7 +122,6 @@ class MazeSolver():
 
     def update_image(self):
         module = self.robot.grab_selected()
-        print(module.shape)
         self.image = module[36:36+im_height, 30:30+im_width]
 
     def solve(self):
@@ -200,9 +221,9 @@ class abstractmaze:
 
                 #draw any walls present
                 if self.hedge_mask[y][x]:
-                    self.hline(im, x, y)
+                    hline(im, x, y)
                 if self.vedge_mask[y][x]:
-                    self.vline(im, x, y)
+                    vline(im, x, y)
         if extras:
             #draw the start / target
             x, y = self.target
@@ -212,10 +233,6 @@ class abstractmaze:
         return im
 
     ##quick and dirty wrappers to draw the horizontal and vertical lines on a maze image
-    def hline(self, dst, x, y, color = (0,0,0)):
-        cv2.line(dst, (14 * x, 14 * (y + 1)), (14 * (x + 1), 14 * (y + 1)), color, 2)
-    def vline(self, dst, x, y, color = (0,0,0)):
-        cv2.line(dst, (14 * (x + 1), 14 * y), (14 * (x + 1), 14 * (y + 1)), color, 2)
 
 
     #TODO: make a save function?
@@ -227,22 +244,22 @@ class abstractmaze:
         x, y = (0, 0)
         while True:
             temp = im.copy()
-            self.vline(temp, x, y, (140, 140, 20))
-            self.hline(temp, x, y, (140, 140, 20))
+            vline(temp, x, y, (140, 140, 20))
+            hline(temp, x, y, (140, 140, 20))
             char = read_and_display(temp, scale = 4)
             if char == ord("v"):
                 if self.vedge_mask[y][x]:
-                    self.vline(im, x, y, (255, 255, 255))
+                    vline(im, x, y, (255, 255, 255))
                     self.vedge_mask[y][x] = 0
                 else:
-                    self.vline(im, x, y)
+                    vline(im, x, y)
                     self.vedge_mask[y][x] = 1
             elif char == ord("h"):
                 if self.hedge_mask[y][x]:
-                    self.hline(im, x, y, (255, 255, 255))
+                    hline(im, x, y, (255, 255, 255))
                     self.hedge_mask[y][x] = 0
                 else:
-                    self.hline(im, x, y)
+                    hline(im, x, y)
                     self.hedge_mask[y][x] = 1
             #65362, 65364, 65361, 65363):# up, down, left, right
             if char == 2490368:

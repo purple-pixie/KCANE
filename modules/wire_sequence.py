@@ -4,7 +4,7 @@ import robot_arm
 from util import *
 from math import pi
 from matplotlib import pyplot as plt
-
+import screen
 import logging
 log = logging.getLogger(__name__)
 
@@ -68,15 +68,39 @@ class Solver():
         pass
     def new(self, robot:robot_arm.RobotArm):
         return SequenceSolver(robot)
-    def identify(self, image):
+    def identify(self, robot):
+        test = SequenceSolver(robot)
+        #waaaaay too generous. Needs an actual check
+        panel = test.get_panel()
+        for wire in panel:
+            if panel[wire][0] != "red":
+                return True
         return False
-
-
 
 class SequenceSolver():
     def __init__(self, robot:robot_arm.RobotArm):
         self.robot = robot
         self.wires = {"red": 0, "blue": 0, "black": 0}
+
+    def solve_interactive(self):
+        pass
+        #for each start, take a baseline screenshot (mouse out the way)
+        #then mouse over it, subtract base from new
+        #cv2.findNonZero() on it, boundingRect that
+        #derive terminal from rectangle
+        #sample color from around start
+        #test_wire, cut or dont
+
+            ##33 - 75 | 1->b
+            ##73 - 114 | 3->b
+            ##62 - 87 | 2 -> b
+            ##32 - 100  | 1->c
+            ##34 - 86 | 2 - >a
+            ##70 - 114 | 3->b
+
+
+
+
 
     def test_wire(self, color, terminal:TERM):
         self.wires[color] += 1
@@ -97,12 +121,10 @@ class SequenceSolver():
             log.info(f"next panel")
             self.next_panel()
 
-    def get_cuts(self):
-        self.update_image()
-        image = self.get_wire_region()
-        #image = cv2.imread("fail/img1.bmp")
-        #display(image)
+    def get_panel(self):
         panel = {}
+        self.image = self.robot.grab_selected()
+        image = self.get_wire_region()
         for lower, upper, color in boundaries:
             lower = np.array(lower, dtype="uint8")
             upper = np.array(upper, dtype="uint8")
@@ -114,9 +136,15 @@ class SequenceSolver():
                     start, term = get_ends(x1, y1, x2, y2)
                     if panel.get(start, (color, term)) != (color, term):
                             log.warning(f"Found {(color, term)}, already have {panel[start]} for {start} {line[0]}")
-                            dump_image(image, "fail/")
+                            #dump_image(image, "fail/")
                     panel[start] = (color, term)
                     log.debug(f"({x1}, {y1}, {x2}, {y2}): {start} -> {term} ({color})")
+        return panel
+
+    def get_cuts(self):
+        #image = cv2.imread("fail/img1.bmp")
+        #display(image)
+        panel = self.get_panel()
         for start in sorted(panel.keys()):
             color, term = panel[start]
             cut = self.test_wire(color, term)

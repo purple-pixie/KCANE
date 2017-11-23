@@ -49,7 +49,9 @@ class Solver():
         pass
     def new(self, robot:robot_arm.RobotArm):
         return MemorySolver(robot)
-    def identify(self, image):
+    def identify(self, robot):
+        #todo: identify memory
+        #current labelling method is too gracious for use as id, will always find labels even if given garbage
         return False
 
 class MemorySolver():
