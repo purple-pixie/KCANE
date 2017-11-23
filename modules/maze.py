@@ -1,7 +1,6 @@
 from enum import Enum
 import numpy as np
 import robot_arm
-from modules.solver import Solver, SolverModule
 from util import *
 
 
@@ -48,7 +47,7 @@ def maze_to_image_coords(x, y):
 
 #======================#
 #Parent solver
-class Maze(SolverModule):
+class Solver():
     def __init__(self):
         self.mazes = np.load("data/modules/maze/mazedump.npy")
         #log# initialised
@@ -59,7 +58,7 @@ class Maze(SolverModule):
 
 #======================#
 #solver proper
-class MazeSolver(Solver):
+class MazeSolver():
     def __init__(self, robot : robot_arm.RobotArm, mazes):
         self.robot = robot
         self.update_image()

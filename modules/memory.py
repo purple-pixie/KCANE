@@ -9,7 +9,6 @@ import pytesseract
 from PIL import Image
 
 import robot_arm
-from modules.solver import Solver, SolverModule
 from util import *
 
 
@@ -43,7 +42,7 @@ def contour_to_value(cnt):
     return 3
 
 
-class Memory(SolverModule):
+class Solver():
     def __init__(self):
         #nothing to init, no comparison images et c.
         #don't really *need* a Memory/MemorySolver divide, but we want to keep it modular
@@ -53,7 +52,7 @@ class Memory(SolverModule):
     def identify(self, image):
         return False
 
-class MemorySolver(Solver):
+class MemorySolver():
     def __init__(self, robot:robot_arm.RobotArm):
         self.robot = robot
         self.update_image()

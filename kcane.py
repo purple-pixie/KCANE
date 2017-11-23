@@ -3,47 +3,78 @@ import numpy as np
 import screen
 from robot_arm import RobotArm
 from util import *
-import modules.password
-import modules.memory
-import modules.maze
-import modules.wire_sequence
+from modules import solvers
 import logging
 logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG)
 
-from modules.solver import Solver, SolverModule
 from util import *
 import logging
 log = logging.getLogger(__name__)
 
 
-class SOLVER(Enum):
-    Password = 0
-    Maze = 1
-    Memory = 2
-    Sequence = 3
+class Robot():
+    def __init__(self, screen):
+        self.screen = screen
+        self.arm = RobotArm(screen)
+        self.modules = [[None] * 6, [None] * 6]
+        #front face. Back is 1
+        self.face = 0
+        self.analyse_bomb()
+        self.defuse_bomb()
 
-def init_solvers():
-    solvers = {}
-    solvers[SOLVER.Password] = modules.password.Password()
-    solvers[SOLVER.Maze] = modules.maze.Maze()
-    solvers[SOLVER.Memory] = modules.memory.Memory()
-    solvers[SOLVER.Sequence] = modules.wire_sequence.Sequence()
-    return solvers
+    def flip_bomb(self):
+        self.arm.rotate(4)
+        # we're now facing the other side
+        self.face = 1-self.face
+
+    def defuse_bomb(self):
+        self.defuse_face()
+        ##test for already winning?
+        ##probably don't need to, trying to flip will take <1 second and it should find 0 modules after
+        self.flip_bomb()
+        self.defuse_face()
+
+    def defuse_face(self):
+        for mod in range(6):
+            if self.modules[self.face][mod]:
+                #self.arm.goto(mod)
+                print(f"module: {self.identify()}")
+                
+
+    def analyse_bomb(self):
+        #reset ourselves to a picked up, centred bomb with no module selected
+        self.arm.wake_up()
+        self.modules[self.face] = list(self.arm.scan_modules())
+        self.flip_bomb()
+        self.modules[self.face] = list(self.arm.scan_modules())
+        print(f"active modules: {self.modules}")
+        
+    
+    def identify(self):
+        im = self.arm.grab_selected()
+        for module in solvers:
+            if solvers[module].identify(im):
+                return module
+        
 
 def main():
-    solvers = init_solvers()
     s = screen.Screen(image=cv2.imread("lcds/img13.bmp", 0))
     s = screen.Screen(2)
-    r = RobotArm(s)
-    p = solvers[SOLVER.Password].new(r)
+    r = Robot(s)
+    #p = solvers[MODULE.Password].new(r)
     #p.solve()
     #r.panic("test/")
 
-from bomb_examiner import find_bomb
+from bomb_examiner import *
 
 if __name__ == "__main__":
-    ims = images_in("test/")
-    for im in ims:
-        find_bomb(im)
+#   s=screen.Screen(2)
+#   import time
+#   for i in range(10):
+#       s.save_screen("test/")
+#       time.sleep(1)
 
-    # main()
+ #  ims = images_in("test/")
+ #  for im in ims:
+ #      find_highlight(im)
+    main()

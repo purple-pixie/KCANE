@@ -1,7 +1,6 @@
 from enum import Enum
 import numpy as np
 import robot_arm
-from modules.solver import Solver, SolverModule
 from util import *
 from math import pi
 from matplotlib import pyplot as plt
@@ -64,7 +63,7 @@ boundaries = [([0, 0, 150], [50, 50, 255], "red"),
 down_button = (65, 133)
 wire_starts = ((42, 50), (42, 72), (42, 97))
 
-class Sequence(SolverModule):
+class Solver():
     def __init__(self):
         pass
     def new(self, robot:robot_arm.RobotArm):
@@ -74,7 +73,7 @@ class Sequence(SolverModule):
 
 
 
-class SequenceSolver(Solver):
+class SequenceSolver():
     def __init__(self, robot:robot_arm.RobotArm):
         self.robot = robot
         self.wires = {"red": 0, "blue": 0, "black": 0}

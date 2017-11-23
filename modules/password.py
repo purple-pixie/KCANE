@@ -9,7 +9,6 @@ import pytesseract
 from PIL import Image
 
 import robot_arm
-from modules.solver import Solver, SolverModule
 from util import *
 import logging
 log = logging.getLogger(__name__)
@@ -105,7 +104,7 @@ def get_features(image, flat = True):
     else:
         return im
 
-class Password(SolverModule):
+class Solver():
 
     def supervise(self, orig, key):
         key = label_from_float(key)
@@ -139,7 +138,7 @@ class Password(SolverModule):
         return PasswordSolver(robot, self.knn, self.passwords)
 
     def identify(self, image):
-        return False
+        return True
 
     def add_image(self, image, label):
         idx = len(self.traindata)
@@ -162,7 +161,7 @@ class Password(SolverModule):
             with open("h:/programming/kcane/data/modules/password/passwords.txt") as pfile:
                 return [line.rstrip("\n") for line in pfile.readlines()]
 
-class PasswordSolver(Solver):
+class PasswordSolver():
     def __init__(self, robot:robot_arm.RobotArm = None, knn = None, passwords = []):
         self.knn = knn
         self.passwords = passwords
@@ -188,11 +187,11 @@ class PasswordSolver(Solver):
             diff = (self.pointers[pos] - target_idx)
             #print(f"Found at idx {target_idx} (diff: {diff%6})")
             if diff % 6 < 3:
-                print(f"diff: {diff}, reversing {diff % 6}")
+               # print(f"diff: {diff}, reversing {diff % 6}")
                 for i in range(diff % 6):
                     self.decrement_letter(pos, after=0.1)
             else:
-                print(f"diff: {diff}, advancing {-diff%6}")
+               # print(f"diff: {diff}, advancing {-diff%6}")
                 for i in range(-diff%6):
                     self.increment_letter(pos, after=0.1)
         else:
@@ -200,12 +199,12 @@ class PasswordSolver(Solver):
             looking_at = self.get_letter_label(pos)
             for i in range(6):
                 log.info(f"Looking for {char} (looking at {looking_at})")
-                self.robot.panic("letters/")
+                #self.robot.panic("letters/")
                 if looking_at == char: # or looking_at == None:
                     return
-                self.increment_letter(pos,after=0.3)
+                self.increment_letter(pos,after=0.25)
                 looking_at = self.get_letter_label(pos)
-                print(f"now: {looking_at}")
+                #print(f"now: {looking_at}")
             print(f"Failed to find {char}!")
             print(self.letters)
             raise IOError(f"Could not find {char}")
