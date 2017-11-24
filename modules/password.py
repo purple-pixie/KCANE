@@ -138,6 +138,8 @@ class Solver():
         return PasswordSolver(robot, self.knn, self.passwords)
 
     def identify(self, robot):
+        #this is why it wont do passwords
+        return False
         test = PasswordSolver(robot, self.knn, self.passwords)
         test.update_image()
         labels = [test.get_letter_label(i, False) for i in range(5)]
@@ -210,8 +212,8 @@ class PasswordSolver():
                 #print(f"now: {looking_at}")
             print(f"Failed to find {char}!")
             print(self.letters)
-            raise IOError(f"Could not find {char}")
-
+            return False
+        return True
 
     def query_bomb(self):
         self.update_image()
@@ -271,9 +273,11 @@ class PasswordSolver():
         return None
     def apply_solution(self, sol):
         for pos, char in enumerate(sol):
-            self.seek_letter(pos, char)
+            if not self.seek_letter(pos, char):
+                return False
         self.robot.moduleto(*submit_button)
         self.robot.click()
+        return True
         #log#print("I am the best")
     def solve(self):
         #self.robot.screen.save_screen("fail/")
@@ -285,7 +289,9 @@ class PasswordSolver():
         #solution = self.get_solution(letters)
         if not (self.robot is None):
             if not solution is None:
-                self.apply_solution(solution)
+                return self.apply_solution(solution)
+        return False
+
         #print(letters)
     def get_letter_label(self, pos, take_screenshot = True):
         """get the label of letter at pos, if take_screenshot then take a new one first"""

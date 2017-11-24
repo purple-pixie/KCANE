@@ -60,9 +60,9 @@ class Screen():
             image = cv2.resize(image, (screen_width, screen_height), interpolation=cv2.INTER_AREA)
         return image
 
-    def save_screen(self, dir = "screens/"):
+    def save_screen(self, dir = "screens/", starts="screen_"):
         im = self.grab()
-        dump_image(im, dir)
+        dump_image(im, dir, starts=starts)
 
     def __repr__(self):
         return f"Screen object, coords {self.monitor}"

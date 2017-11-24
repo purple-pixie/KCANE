@@ -4,23 +4,26 @@ import screen
 from robot_arm import RobotArm
 from util import *
 from modules import solvers
+from bomb_drawer import BombDrawer
 import logging
 logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG)
-
-from util import *
-import logging
 log = logging.getLogger(__name__)
 
+module_images = dict(images_in("images/", return_names=True))
+print(module_images)
 
 class Robot():
-    def __init__(self, screen, window_name = None):
+    def __init__(self, screen):
         self.screen = screen
-        self.arm = RobotArm(screen, window_name = window_name)
-        self.modules = [[None] * 6, [None] * 6]
+        self.arm = RobotArm(screen, robot=self)
+        self.modules = [["unknown"] * 6, ["unknown"] * 6]
         #front face. Back is 1
         self.face = 0
-        #self.go()
+        self.selected = 0
+        self.drawer = BombDrawer(self)
+
     def go(self):
+        #self.examine_gubbins()
         self.analyse_bomb()
         self.defuse_bomb()
 
@@ -40,9 +43,10 @@ class Robot():
         self.defuse_face()
 
     def defuse_face(self):
-        for mod in range(6):
-            if self.modules[self.face][mod]:
-                self.arm.goto(mod)
+        for pos in range(6):
+            if self.modules[self.face][pos] != "empty":
+                self.selected = pos
+                self.arm.goto(pos)
                 sleep(0.2)
                 module = self.identify()
                 if module is None:
@@ -54,14 +58,36 @@ class Robot():
                 self.arm.rclick(after=0.25)
 
     def examine_gubbins(self):
-        pass
+        self.arm.wake_up()
+        self.arm.mouse_to_centre()
+        x, y = self.arm.mouse_position()
+        for i in range(142,152,2):
+            self.arm.rotate(x=x,y=y-i)
+            self.screen.save_screen(f"edges/",starts=f"y{i}-_")
+            self.arm.unrotate()
+            self.arm.rotate(x=x,y=y+i)
+            self.screen.save_screen(f"edges/",starts=f"y{i}+_")
+            self.arm.unrotate()
+        #edges = self.arm.get_edges()
+        #left edge
+        #left =
 
+    def draw(self):
+        self.drawer.draw()
+
+    def draw_module(self, image):
+        self.drawer.draw_module(image, self.selected)
+
+    def analyse_face(self):
+        for i, label in enumerate(self.arm.scan_modules()):
+            self.modules[self.face][i] = label
+            self.draw()
     def analyse_bomb(self):
         #reset ourselves to a picked up, centred bomb with no module selected
         self.arm.wake_up()
-        self.modules[self.face] = list(self.arm.scan_modules())
+        self.analyse_face()
         self.flip_bomb()
-        self.modules[self.face] = list(self.arm.scan_modules())
+        self.analyse_face()
         #print(f"active modules: {self.modules}")
         
     
@@ -77,7 +103,9 @@ class Robot():
 def main():
     #s = screen.Screen(image=cv2.imread("dump/maze/0.bmp"))
     s = screen.Screen(2)
-    r = Robot(s, "thoughts")
+    r = Robot(s)
+    #todo; Draw stuff
+    #we like drawing
     #r.arm.goto(0,0.2)
 #    p = solvers["maze"].identify(r.arm)
     r.go()

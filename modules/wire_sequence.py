@@ -69,8 +69,9 @@ class Solver():
     def new(self, robot:robot_arm.RobotArm):
         return SequenceSolver(robot)
     def identify(self, robot):
+        return False
+        #below is waaaaay too generous. Needs an actual check or to go last
         test = SequenceSolver(robot)
-        #waaaaay too generous. Needs an actual check
         panel = test.get_panel()
         for wire in panel:
             if panel[wire][0] != "red":

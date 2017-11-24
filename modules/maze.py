@@ -39,15 +39,14 @@ class DIR(Enum):
 #======================#
 #Helper functions#
 def image_to_maze_coords(x, y):
-    return np.array(((x)//14, (y)//14))
+    return ((x)//14, (y)//14)
 def maze_to_image_coords(x, y):
-    return np.array((x * 14 + 7, y * 14 + 7))
+    return (x * 14 + 7, y * 14 + 7)
 
 def hline(dst, x, y, color = (0,0,0)):
     cv2.line(dst, (14 * x, 14 * (y + 1)), (14 * (x + 1), 14 * (y + 1)), color, 2)
 def vline(dst, x, y, color = (0,0,0)):
     cv2.line(dst, (14 * (x + 1), 14 * y), (14 * (x + 1), 14 * (y + 1)), color, 2)
-
 #======================#
 #Parent solver
 class Solver():
@@ -125,21 +124,26 @@ class MazeSolver():
         self.image = module[36:36+im_height, 30:30+im_width]
 
     def solve(self):
+        if self.start == None:
+            #if already solved, we won't be able to find a start
+            return
         maze = abstractmaze(self.maze, self.start, self.target)
+        maze.draw(True)
         sol = maze.get_solution()
-        for step in sol:
-            #apply the solution
-            x, y = buttons[step.value]
+        self.robot.draw_module(maze.image)
+        for dir in sol:
+            x, y = buttons[dir.value]
             self.robot.moduleto(x, y)
             self.robot.click(0.2, 0.2)
-
+        return True
 #==================#
 #abstract representation of a maze
 # Shouldn't need any knowledge of where the mazes come from
 # but it does, because I wanted drawing functions that look like KTANE mazes
 
 class abstractmaze:
-    def __init__(self, maze, start = (0,0), target = (5,5)):
+    def __init__(self, maze, start = (0,0), target = (5,5), image=None):
+        self.image = np.full((im_height, im_width, 3), 130, dtype="uint8")
         self.already_tried = np.zeros((6, 6), dtype=np.bool_)
         self.start = start
         self.target = target
@@ -153,25 +157,34 @@ class abstractmaze:
 
     def get_solution(self):
         """return a list of steps (as DIR items) to go from start to target"""
-        win, path = self.solve_recursive(*self.start)
+        win, path = self.solve_recursive(*self.start, *self.start)
         if win:
             #strip off the first 'move', because it doesn't have a direction / isn't a real move
             return path[1:]
         else:
             print("No path found")
             return []
+        
+    def draw_move(self, x, y, xx, yy, failed = False):
+        color = (0,0,230) if failed else (20,230,20)
+        cv2.line(self.image, maze_to_image_coords(x, y), maze_to_image_coords(xx, yy), color)
 
-    def solve_recursive(self, x, y, direction = DIR.NONE):
+    def solve_recursive(self, x, y, prev_x, prev_y, direction = DIR.NONE):
         #recursively solve the maze
         if (x, y) == self.target:
+            self.draw_move(x, y, prev_x, prev_y)
             return True, [direction]
         if self.already_tried[y][x]:
             return False, None
         self.already_tried[y][x] = True
         for xx, yy, dr in self.moves(x, y):
-            win, path = self.solve_recursive(xx, yy, dr)
+            win, path = self.solve_recursive(xx, yy, x, y, dr)
             if win:
+                self.draw_move(x, y, prev_x, prev_y)
                 return True, [direction] + path
+        #draw failed moves
+        #maybe if debug
+        #self.draw_move(x, y, prev_x, prev_y, True)
         return False, None
 
     def moves(self, x, y):
@@ -213,11 +226,12 @@ class abstractmaze:
     def draw(self, extras=False):
         """Draw the maze onto a new image and return it
         if extras, draw the start and end points"""
-        im = np.ones((120-36, 115-30, 3), dtype = np.uint8)*255
+        im = self.image
         for y in range(6):
             for x in range(6):
                 #draw the dots
-                cv2.rectangle(im, tuple(maze_to_image_coords(x, y)-1), tuple(maze_to_image_coords(x, y)+1), (100,100,100), -1)
+                cv2.rectangle(im, tuple(np.array(maze_to_image_coords(x, y))-1),
+                              tuple(np.array(maze_to_image_coords(x, y))+1), (100,100,100), -1)
 
                 #draw any walls present
                 if self.hedge_mask[y][x]:
@@ -230,7 +244,6 @@ class abstractmaze:
             cv2.circle(im, tuple(maze_to_image_coords(x, y)), 8, (0, 0, 255), -1)
             x, y = self.start
             cv2.circle(im, tuple(maze_to_image_coords(x, y)), 5, (50, 50, 220), -1)
-        return im
 
     ##quick and dirty wrappers to draw the horizontal and vertical lines on a maze image
 

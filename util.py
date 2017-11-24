@@ -23,9 +23,10 @@ class PrintSnooper:
         self.stdout.write(s[:100])
         self.stdout.write("\n")
 
-def images_in(dir = "", flags=1, ext = ".bmp"):
+def images_in(dir = "", flags=1, ext = ".bmp", return_names = False):
     for im in glob.glob(f"{dir}*{ext}"):
-        yield cv2.imread(im, flags)
+        if return_names: yield (naked_filename(im), cv2.imread(im, flags))
+        else: yield cv2.imread(im, flags)
 
 def read_key(directions = True):
     key = 256
@@ -119,3 +120,16 @@ def sleep(dur: float, abort=True):
             print(f"key: {threading.active_count()} aborting")
             raise KeyboardInterrupt("User aborted")
     time.sleep(dur)
+
+
+def draw_label(image, centre, label, color = (0,0,0), font=cv2.FONT_HERSHEY_SIMPLEX,
+               font_scale=.5, thickness=1):
+    """Draws label for point to a given image.
+    Returns copy of image, original is not modified.
+    """
+    # http://docs.opencv.org/modules/core/doc/drawing_functions.html#gettextsize
+    # Returns bounding box and baseline -> ((width, height), baseline)
+    size, baseline = cv2.getTextSize(label, font, font_scale, thickness)
+    x, y = centre
+    label_top_left = (x - size[0] // 2, y + size[1] //2 )
+    cv2.putText(image, label, label_top_left, font, font_scale, color, thickness)

@@ -12,6 +12,9 @@ mouse = Controller()
 def on_press(key):
     if key == Key.space:
         return False
+
+    #quit on any key
+    return False
     return True
 
 def on_release(key):
@@ -33,9 +36,9 @@ selected_right = 496
 
 
 class RobotArm:
-    def __init__(self, screen, wake_up = False, window_name = None):
+    def __init__(self, screen, wake_up = False, robot = None):
         self.screen = screen
-        self.window_name = window_name
+        self.robot = robot
         #listen for the user pressing space
         #if they ever do, quit out next time we're asked to sleep
         listen = Listener(on_press=on_press, on_release=on_release)
@@ -48,6 +51,10 @@ class RobotArm:
         self.rclick(after = 0.25)
         self.pick_up()
 
+
+    def draw(self):
+        if not self.robot is None:
+            self.robot.draw()
     def panic(self, dir = "screens/"):
         self.screen.save_screen(dir)
 
@@ -57,7 +64,9 @@ class RobotArm:
             sleep(0.1, True)
             s = self.grab()
             if dump: dump_image(s, starts=f"mod{mod}_")
-            yield bomb_examiner.find_highlight(s)
+            #find the clock?
+            #can probably just let simple buttons deal with it themselves
+            yield "unidentified" if bomb_examiner.find_highlight(s) else "empty"
 
     def get_edges(self):
         for i in range(4):
@@ -67,7 +76,7 @@ class RobotArm:
             self.unrotate()
 
 
-    def rotate(self, dir = 0):
+    def rotate(self, dir = -1, x=0, y=0):
         """rotate the bomb - does not let go of right click. Do that yourself
         dir 0-3 rotate 90 degrees left, up, right, down
         dir 4 and 5 rotate 180 degrees left and right"""
@@ -75,18 +84,19 @@ class RobotArm:
         mouse.press(Button.right)
         #allow game to realise we've clicked
         sleep(0.05)
-        x, y = self.mouse_position()
-        #self.mouseto(x + (left and -100 or 100), y)
-        #dir = dir % 4
-        if dir == 0: x = x - 150
-        elif dir == 1: y = y - 150
-        elif dir == 2: x = x + 150
-        elif dir == 3: y = y + 150
-        elif dir == 4: x = x - 300
-        elif dir == 5: x = x + 300
-        else:
-            print(f"dir {dir} not sane (RobotArm.rotate)")
-            return
+        if not dir == -1:
+            x, y = self.mouse_position()
+            #self.mouseto(x + (left and -100 or 100), y)
+            #dir = dir % 4
+            if dir == 0: x = x - 150
+            elif dir == 1: y = y - 150
+            elif dir == 2: x = x + 150
+            elif dir == 3: y = y + 150
+            elif dir == 4: x = x - 300
+            elif dir == 5: x = x + 300
+            else:
+                print(f"dir {dir} not sane (RobotArm.rotate)")
+                return
             #mouse.move(int(150 / self.screen.xscale), 0)
 
             #rotate left:
@@ -100,7 +110,7 @@ class RobotArm:
             mouse.release(Button.right)
             sleep(0.1)
 
-    def unrotate(self, dir = 0):
+    def unrotate(self):
         self.mouse_to_centre()
         sleep(0.5)
         mouse.release(Button.right)
@@ -154,6 +164,4 @@ class RobotArm:
         self.click(button=Button.right, **kwargs)
 
     def draw_module(self, image):
-        im=self.grab()
-        canvas = im[selected_top:selected_bot,
-                   selected_left:selected_right]
+        self.robot.draw_module(image)
