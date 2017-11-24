@@ -20,14 +20,18 @@ class BombDrawer:
     def show(self):
         cv2.imshow(self.window_title, self.image)
         cv2.waitKey(1)
-    def draw_module(self, image, pos):
+    def draw_module(self, image, pos, nonwhite = False):
         face_region = get_face_region(self.image, self.robot.face)
         region = get_module_region(face_region, pos)
 
         if not image.shape == region.shape:
             image = cv2.resize(image, region.shape[:2], interpolation=cv2.INTER_AREA)
             cv2.rectangle(image,(0,0),image.shape[:2], (0,0,0))
-        np.copyto(region, image)
+        if nonwhite:
+            mask = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) < 255
+            region[mask] = image[mask]
+        else:
+            np.copyto(region, image)
         self.show()
 
     def draw(self):

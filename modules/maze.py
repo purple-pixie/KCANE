@@ -124,16 +124,20 @@ class MazeSolver():
         self.image = module[36:36+im_height, 30:30+im_width]
 
     def solve(self):
-        if self.start == None:
+        if self.start is None:
+            self.start = self.target
             #if already solved, we won't be able to find a start
-            return
+            #return True
         maze = abstractmaze(self.maze, self.start, self.target)
         maze.draw(True)
         sol = maze.get_solution()
         self.robot.draw_module(maze.image)
-        for dir in sol:
-            x, y = buttons[dir.value]
-            self.robot.moduleto(x, y)
+        for x,y,dir in sol:
+            image = maze.image.copy()
+            cv2.circle(image, tuple(maze_to_image_coords(x, y)), 5, (250, 250, 250), 4)
+            self.robot.draw_module(image)
+            mx, my = buttons[dir.value]
+            self.robot.moduleto(mx, my)
             self.robot.click(0.2, 0.2)
         return True
 #==================#
@@ -173,7 +177,7 @@ class abstractmaze:
         #recursively solve the maze
         if (x, y) == self.target:
             self.draw_move(x, y, prev_x, prev_y)
-            return True, [direction]
+            return True, [(x, y, direction)]
         if self.already_tried[y][x]:
             return False, None
         self.already_tried[y][x] = True
@@ -181,7 +185,7 @@ class abstractmaze:
             win, path = self.solve_recursive(xx, yy, x, y, dr)
             if win:
                 self.draw_move(x, y, prev_x, prev_y)
-                return True, [direction] + path
+                return True, [(x, y, direction)] + path
         #draw failed moves
         #maybe if debug
         #self.draw_move(x, y, prev_x, prev_y, True)

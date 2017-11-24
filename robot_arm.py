@@ -9,6 +9,18 @@ from util import *
 mouse = Controller()
 
 
+def sleep(dur: float, abort=True):
+    # seconds to milis
+    if abort:
+        # a pretty hacky solution but it detects keypresses
+        # the keyboard listener will quit once it sees a letter, so <2 threads means it quit
+        # running the debugger makes it never abort, but you're debugging so that's probably good
+        if threading.active_count() < 2:
+            print(f"key: {threading.active_count()} aborting")
+            mouse.release(button=Button.right)
+            raise KeyboardInterrupt("User aborted")
+    time.sleep(dur)
+
 def on_press(key):
     if key == Key.space:
         return False
@@ -72,7 +84,7 @@ class RobotArm:
         for i in range(4):
             self.rotate(i)
             #self.screen.save_screen()
-            yield self.grab()
+            yield i, self.grab()
             self.unrotate()
 
 
@@ -88,12 +100,12 @@ class RobotArm:
             x, y = self.mouse_position()
             #self.mouseto(x + (left and -100 or 100), y)
             #dir = dir % 4
-            if dir == 0: x = x - 150
-            elif dir == 1: y = y - 150
-            elif dir == 2: x = x + 150
-            elif dir == 3: y = y + 150
-            elif dir == 4: x = x - 300
-            elif dir == 5: x = x + 300
+            if dir == 0: x = x - 146
+            elif dir == 1: y = y - 146
+            elif dir == 2: x = x + 146
+            elif dir == 3: y = y + 146
+            elif dir == 4: x = x - 292
+            elif dir == 5: x = x + 292
             else:
                 print(f"dir {dir} not sane (RobotArm.rotate)")
                 return

@@ -115,6 +115,7 @@ class Solver():
             cv2.imwrite(f"letters/{key}.bmp", orig)
 
 
+
     def __init__(self, reget_features = True):
         """if reget_features, run get_features on the template images"""
         self.passwords = self.init_passwords()
@@ -139,11 +140,11 @@ class Solver():
 
     def identify(self, robot):
         #this is why it wont do passwords
-        return False
+        #return False
         test = PasswordSolver(robot, self.knn, self.passwords)
         test.update_image()
         labels = [test.get_letter_label(i, False) for i in range(5)]
-        return any(labels)
+        return labels.count("?") < 4
 
     def add_image(self, image, label):
         idx = len(self.traindata)
@@ -170,19 +171,35 @@ class PasswordSolver():
     def __init__(self, robot:robot_arm.RobotArm = None, knn = None, passwords = []):
         self.knn = knn
         self.passwords = passwords
-        self.letters = []
+        self.letters = [["?"]]*5
         self.image = None
         self.robot = robot
         self.pointers = [0] * 5
 
-    def increment_letter(self, pos, after=0.5):
-        self.robot.moduleto(*up_buttons[pos])
+    def draw(self):
+        canvas = np.full((200,200,3), 230, dtype="uint8")
+        for pos in range(5):
+            #draw the selection indicator
+            x1 = 38 * pos + 24
+            y1 = 25 * self.pointers[pos] + 24
+            tri_points = np.array([[[x1, y1]], [[x1 + 8, y1 + 7]], [[x1, y1 + 14]]], np.int32)
+            cv2.polylines(canvas, [tri_points], True, (0,0,250))
+
+            #draw all known letters
+            x1 = 38 * pos + 32
+            for i, label in enumerate(self.letters[pos]):
+                y1 = 25 * i + 20
+                cv2.rectangle(canvas, (x1, y1), (x1 + 20, y1 + 20), (100,100,240), 1)
+                draw_label(canvas, (x1 + 10, y1 + 10), str.upper(label))
+
+        self.robot.draw_module(canvas)
+
+    def increment_letter(self, pos, after=0.5, incr = True):
+        buttons = up_buttons if incr else down_buttons
+        self.robot.moduleto(*buttons[pos])
         self.robot.click(before=0.05, after=after)
-        self.pointers[pos] = (self.pointers[pos] + 1) % 6
-    def decrement_letter(self, pos, after=0.5):
-        self.robot.moduleto(*down_buttons[pos])
-        self.robot.click(before=0.05, after=after)
-        self.pointers[pos] = (self.pointers[pos] - 1) % 6
+        self.pointers[pos] = (self.pointers[pos] + (1 if incr else -1)) % 6
+        self.draw()
     def seek_letter(self, pos, char):
         """cycle letter at position pos until it shows char
         uses knowledge of the letters in that wheel if present, otherwise identifies letters on the fly"""
@@ -194,21 +211,22 @@ class PasswordSolver():
             if diff % 6 < 3:
                # print(f"diff: {diff}, reversing {diff % 6}")
                 for i in range(diff % 6):
-                    self.decrement_letter(pos, after=0.1)
+                    self.increment_letter(pos, after=0.1, incr = False)
             else:
                # print(f"diff: {diff}, advancing {-diff%6}")
                 for i in range(-diff%6):
                     self.increment_letter(pos, after=0.1)
         else:
-            #TODO remove naked while loop - needs to build up a list for this wheel and make sure we aren't stuck
             looking_at = self.get_letter_label(pos)
-            for i in range(6):
+            for i in range(6-self.pointers[pos]):
                 log.info(f"Looking for {char} (looking at {looking_at})")
                 #self.robot.panic("letters/")
                 if looking_at == char: # or looking_at == None:
-                    return
-                self.increment_letter(pos,after=0.25)
+                    return True
+                self.increment_letter(pos,after=0.3)
                 looking_at = self.get_letter_label(pos)
+                self.letters[pos].append(looking_at)
+                self.draw()
                 #print(f"now: {looking_at}")
             print(f"Failed to find {char}!")
             print(self.letters)
@@ -235,6 +253,8 @@ class PasswordSolver():
                     break
                 self.increment_letter(letter_pos, after=.2)
                 letter = self.get_letter_label(letter_pos)
+                    #letter failed OCR. skip it?
+                    #return False
                 self.letters[letter_pos] += [letter]
                 #log#debug#print(self.letters)
                 soln =self.get_solution()
@@ -323,7 +343,7 @@ class PasswordSolver():
                         return label_from_float(ret)
             #didn't find by recentring
             #picnic
-            return None
+            return "?"
         return label_from_float(ret)
     def update_image(self):
         self.image = get_lcd(self.robot.grab_selected(0))

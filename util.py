@@ -12,6 +12,14 @@ import threading
 import time
 import sys
 import inspect
+import numpy as np
+
+def auto_canny(image, sigma=0.33):
+    v = np.median(image)
+    lower = int(max(0, (1.0 - sigma) * v))
+    upper = int(min(255, (1.0 + sigma) * v))
+    edged = cv2.Canny(image, lower, upper)
+    return edged
 
 class PrintSnooper:
     def __init__(self, stdout):
@@ -112,15 +120,6 @@ def dump_image(img, dir="test/", announce = True, starts = "img"):
         if announce:
                 print(f"dumping to {filename}")
         cv2.imwrite(filename, img)
-
-def sleep(dur: float, abort=True):
-    # seconds to milis
-    if abort:
-        if threading.active_count() < 2:
-            print(f"key: {threading.active_count()} aborting")
-            raise KeyboardInterrupt("User aborted")
-    time.sleep(dur)
-
 
 def draw_label(image, centre, label, color = (0,0,0), font=cv2.FONT_HERSHEY_SIMPLEX,
                font_scale=.5, thickness=1):

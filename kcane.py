@@ -1,7 +1,7 @@
 from enum import Enum
 import numpy as np
 import screen
-from robot_arm import RobotArm
+from robot_arm import RobotArm, sleep
 from util import *
 from modules import solvers
 from bomb_drawer import BombDrawer
@@ -10,7 +10,6 @@ logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG)
 log = logging.getLogger(__name__)
 
 module_images = dict(images_in("images/", return_names=True))
-print(module_images)
 
 class Robot():
     def __init__(self, screen):
@@ -18,12 +17,13 @@ class Robot():
         self.arm = RobotArm(screen, robot=self)
         self.modules = [["unknown"] * 6, ["unknown"] * 6]
         #front face. Back is 1
+        self.drawer = BombDrawer(self)
         self.face = 0
         self.selected = 0
-        self.drawer = BombDrawer(self)
-
+        self.battery_count = 0
+        self.gubbins = {}
     def go(self):
-        #self.examine_gubbins()
+        self.examine_gubbins()
         self.analyse_bomb()
         self.defuse_bomb()
 
@@ -31,7 +31,8 @@ class Robot():
         self.arm.rotate(4)
         # we're now facing the other side
         self.face = 1-self.face
-
+        #make sure we caught up
+        sleep(0.25)
     def defuse_bomb(self):
         self.defuse_face()
         ##test for already winning?
@@ -46,39 +47,67 @@ class Robot():
         for pos in range(6):
             if self.modules[self.face][pos] != "empty":
                 self.selected = pos
-                self.arm.goto(pos)
-                sleep(0.2)
+                self.arm.goto(pos, after = 0.5)
                 module = self.identify()
                 if module is None:
                     print("Not sure what this is. Skipping")
+                    self.draw_module(module_images["unknown"], nonwhite=True)
                     #dump_image(self.arm.grab_selected())
                 else:
                     print(f"Looks like {module}. Defusing")
-                    solvers[module].new(self.arm).solve()
+                    solved = solvers[module].new(self.arm).solve()
+                    if solved:
+                        print(f"Solved it")
+                        self.draw_module(module_images["solved"], nonwhite=True)
+                    else:
+                        print(f"Failed")
+
                 self.arm.rclick(after=0.25)
+
+    #185, 303: 104x54
+
 
     def examine_gubbins(self):
         self.arm.wake_up()
         self.arm.mouse_to_centre()
-        x, y = self.arm.mouse_position()
-        for i in range(142,152,2):
-            self.arm.rotate(x=x,y=y-i)
-            self.screen.save_screen(f"edges/",starts=f"y{i}-_")
-            self.arm.unrotate()
-            self.arm.rotate(x=x,y=y+i)
-            self.screen.save_screen(f"edges/",starts=f"y{i}+_")
-            self.arm.unrotate()
-        #edges = self.arm.get_edges()
-        #left edge
-        #left =
+        batteries = 0
+        parallel = False
+        serial = ""
+        for dir, edge in self.arm.get_edges():
+            warped = get_edge(edge, dir)
+            if not warped is None:
+                hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
+
+                if batteries < 3:
+                    bats = count_batteries(hsv)
+                    if bats > 0:
+                        batteries += bats
+                        print(f"Found {bats} more batteries")
+                    #dump_image(warped, dir="gubbins", starts=f"Bats{bats}_")
+
+                if not parallel:
+                    parallel = find_ports(hsv)
+                    if parallel:
+                        print("Found a parallel port")
+
+                if serial == "":
+                    serial = find_serial(hsv)
+                    if serial != "":
+                        print(f"Found serial: {serial}")
+
+        for i in "batteries", "parallel", "serial":
+            self.gubbins[i] = eval(i)
+        print(f"Gubbins results: {self.gubbins}")
+
 
     def draw(self):
         self.drawer.draw()
 
-    def draw_module(self, image):
-        self.drawer.draw_module(image, self.selected)
+    def draw_module(self, image, nonwhite = False):
+        self.drawer.draw_module(image, self.selected, nonwhite=nonwhite)
 
     def analyse_face(self):
+        sleep(0.1)
         for i, label in enumerate(self.arm.scan_modules()):
             self.modules[self.face][i] = label
             self.draw()
@@ -89,8 +118,8 @@ class Robot():
         self.flip_bomb()
         self.analyse_face()
         #print(f"active modules: {self.modules}")
-        
-    
+
+
     def identify(self):
         im = self.arm.grab()
         static_screen = screen.Screen(image=im)
@@ -98,7 +127,7 @@ class Robot():
         for module in solvers:
             if solvers[module].identify(fake_arm):
                 return module
-        
+
 
 def main():
     #s = screen.Screen(image=cv2.imread("dump/maze/0.bmp"))
@@ -112,16 +141,11 @@ def main():
     #p.solve()
     #r.panic("test/")
 
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 from bomb_examiner import *
 
 if __name__ == "__main__":
-#   s=screen.Screen(2)
-#   import time
-#   for i in range(10):
-#       s.save_screen("test/")
-#       time.sleep(1)
-
- #  ims = images_in("test/")
- #  for im in ims:
- #      find_highlight(im)
+    #test_edges()
     main()
