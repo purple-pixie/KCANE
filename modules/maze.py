@@ -56,7 +56,9 @@ class Solver():
     def new(self, robot : robot_arm.RobotArm):
         return MazeSolver(robot, self.mazes)
     def identify(self, robot: robot_arm.RobotArm):
-        image = robot.grab_selected()[36:36+im_height, 30:30+im_width]
+        image = robot.grab_selected()
+        canvas = image.copy()
+        image = image[36:36+im_height, 30:30+im_width]
         import itertools
         #there's bound to be an elegant way to do this without for loops
         #right now I can't think of it
@@ -66,16 +68,20 @@ class Solver():
             im = image[14 * y:14 * (y + 1), 14 * x:14 * (x + 1)]
             green = np.sum(im[:,:,1]>150)
             if green > 25:
+                cv2.rectangle(canvas, (14*x + 30,14*y + 36),(14 * (x+1) + 28, 14 * (y+1) + 34), (0,255,0),1)
                 marks.append((x, y))
-                if len(marks) > 2:
-                    return False
+                # can break out here for efficiency, but will leave canvas only partly rendered
+                #if len(marks) > 2:
+                #   return False, canvas
+            else:
+                cv2.rectangle(canvas, (14*x + 30,14*y + 36),(14 * (x+1) + 28, (14 * (y+1) + 34)), (0,0,0),1)
         if len(marks) != 2:
-            return False
+            return False, canvas
         #we found exactly two markers ... still, we should make sure they are in valid places
         if marks[0] not in markers or marks[1] not in markers:
-            return False
+            return False, canvas
         #they both were. Let's just make sure they both match the same maze
-        return markers[marks[0]] == markers[marks[1]]
+        return markers[marks[0]] == markers[marks[1]], canvas
 
 #======================#
 #solver proper
@@ -96,7 +102,7 @@ class MazeSolver():
             im=cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
             cnts = contour(im)
             im = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
-            ##TODO: sanity check contours - if given a crap image this can divide by zero
+            ##can divide by zero given a crap image. make sure we identified it successfully first
             ## Or just give it a try/catch
             maze_id = -1
             marker_x, marker_y = (0,0)

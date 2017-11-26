@@ -7,7 +7,9 @@ from util import *
 screen_width = 800
 screen_height = 600
 class Screen():
-    def __init__(self, monitor = 0, image = None):
+    def __init__(self, monitor = 0, image_path = None, image = None):
+        if not image_path is None:
+            image = cv2.imread(image_path)
         if not image is None:
             self.sct = None
 

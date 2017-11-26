@@ -103,10 +103,90 @@ def dist(a, b):
     return (a[0]-b[0]) ** 2 + (a[1] - b[1]) ** 2
 
 def test_edges():
-    for name, image in images_in("dump/gubbins/", return_names=True):
-        find_ports(cv2.cvtColor(image, cv2.COLOR_BGR2HSV))
+    for name, image in images_in("dump/edges/", return_names=True):
+       # image = get_edge(image)
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        #image = cv2.cvtColor(hsv , cv2.COLOR_HSV2BGR)
+        #count_batteries(image, hsv)
+        find_serial(image, hsv)
 
-def find_serial(hsv):
+def find_indicators(hsv):
+    #todo find indicators
+    # very well defined circles with very high value, low hue/sat
+    # grab the region to the right of them
+    # clean trim and tesseract it
+    return []
+
+def tess_region_from_contour(image, cnt, config = "--psm 10 digits"):
+    x, y, w, h = cv2.boundingRect(cnt)
+    print(f"W: {w}, H: {h}")
+    im = image[y-2:y+h+2,x-1:x+w+1]
+    display(im)
+    return tess(im, config)
+
+def get_serial_letters(image):
+    cnts = contour(image)
+    im = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    for cnt in cnts:
+        cv2.drawContours(im, [cnt], 0, (0,0,255), 1)
+    display(im)
+    #first sort by size to get the 6 characters
+    if len(cnts) < 6:
+        #didn't find digits
+        print(f"Failed {len(cnts)}")
+        return
+    boxes = [(cv2.boundingRect(i), i) for i in cnts]
+    by_area = sorted(boxes, key = lambda x: x[0][2] * x[0][3], reverse=True)[:6]
+    by_x = sorted(by_area, key=lambda x: x[0][0])
+    print(by_x[0][0])
+    #regions = sorted(cnts, key=cv2.contourArea, reverse=True)[:6]
+    #then sort by x-value to get them in order
+    #regions = sorted(regions, key = lambda x: cv2.boundingRect(x)[0])
+    for box,cnt in by_x[:-1]:
+        text= tess_region_from_contour(image, cnt, "--psm digitletters")
+        #print(f"tessL {text}")
+    digit = by_x[-1][1]
+    text = tess_region_from_contour(image, digit, "--psm 10 digits")
+    #print(f"tessD {text}")
+
+
+
+def find_serial(bgr, hsv):
+    canvas = bgr.copy()
+    lower = np.array([10,30,180], dtype="uint8")
+    upper = np.array([30,50,225], dtype="uint8")
+    mask = cv2.inRange(hsv, lower, upper)
+    blur = cv2.GaussianBlur(mask,(11,11),0)
+    #display(blur)
+    #get_serial_letters(blur)
+    #display(np.hstack((mask, blur)))
+    #TODO: find serial number
+    #get contours
+    #get bounding rects
+    #find something roughly serial sized
+    #clean, trim and tesseract it
+    contours = contour(blur)
+    #display(blur)
+    for cnt in contours:
+        x, y, w, h = cv2.boundingRect(cnt)
+        if 120 < w < 150:
+            region = hsv[y:y+h,x:x+w]
+            #display(region)
+            mask = inRange(region, [2,0,0], [50,50,100])
+            #display(mask)
+            #get_serial_letters(mask)
+            text = tess(mask, config="--psm 8 letters", remove=False)
+            digits = tess(mask, config="--psm 8 digits", remove=False)
+            dump_image(mask, dir="serial")
+            print(f"Tess: {text} | {digits}")
+
+            #TODO: Do this properly and be less of a hack
+            #interpret the last letter as a digit and the rest as letters
+            #will probably mistake 1s for Is but otherwise should find vowels accurately
+            #in spite of tess's awful accuracy
+            return text[:-1]+digits[-1]
+            #cv2.drawContours(canvas, [cnt], -1, random_color() ,1)
+           # display(mask)
     return ""
 
 def find_ports(hsv):
@@ -119,12 +199,13 @@ def find_ports(hsv):
     #and that's all we care about (?)
     return np.sum(mask) > 10
 
-def count_batteries(hsv, canvas = None):
+def count_batteries(image, hsv, draw = True):
     #for name, image in images_in("dump/gubbins/", return_names=True):
     #image = cv2.imread("dump/gubbins/A.bmp")
     #can = np.full(image.shape, 255, dtype="uint8")
-    if canvas is None:
-        canvas = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB_FULL)
+    canvas = None
+    if draw:
+        canvas = image.copy()
     lower = np.array([16,180,120], dtype="uint8")
     upper = np.array([25,255,255], dtype="uint8")
     mask = cv2.inRange(hsv, lower, upper)
@@ -136,22 +217,30 @@ def count_batteries(hsv, canvas = None):
         radius = int(radius)
         if radius < 8:
             continue
-        if not canvas is None:
+        if draw:
             cv2.circle(canvas, center, radius, (0, 255, 0), 2)
 
         for c, r in batteries:
-            if dist(c, center) < radius ** 2:
-                batteries.remove((c,r))
-                batteries.append((center, radius))
-                break
-            if dist(c, center) < r ** 2:
-                break
+            if dist(c, center) < max(radius, r) ** 2:
+                if r < radius:
+                    batteries.remove((c,r))
+                    batteries.append((center, radius))
+                    if draw:
+                        cv2.circle(canvas, c, r, (0, 0, 255), 2)
+                    break
+                else:
+                    if draw:
+                        cv2.circle(canvas, center, radius, (0, 0, 255), 2)
+                    break
         else:
             batteries.append((center, radius))
 
     if len(batteries) % 2:
         print(f"Only found {len(batteries)} battery ends, that seems wrong")
-        display(canvas)
+        dump_image(canvas, dir="fail", starts="battery")
+        dump_image(image, dir="fail", starts="battery")
+
+    #display(canvas)
     return int(np.floor(len(batteries)/2))
     #display(can)
 

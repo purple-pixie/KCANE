@@ -144,7 +144,9 @@ class Solver():
         test = PasswordSolver(robot, self.knn, self.passwords)
         test.update_image()
         labels = [test.get_letter_label(i, False) for i in range(5)]
-        return labels.count("?") < 4
+        canvas = np.full(robot.grab_selected().shape, 120, dtype="uint8")
+        draw_label(canvas, (canvas.shape[0] // 2, canvas.shape[1] // 2), "".join(labels))
+        return labels.count("?") < 4, canvas
 
     def add_image(self, image, label):
         idx = len(self.traindata)
@@ -160,12 +162,8 @@ class Solver():
 
 
     def init_passwords(self):
-        try:
-            with open("data/modules/password/passwords.txt") as pfile:
-                return [line.rstrip("\n") for line in pfile.readlines()]
-        except:
-            with open("h:/programming/kcane/data/modules/password/passwords.txt") as pfile:
-                return [line.rstrip("\n") for line in pfile.readlines()]
+        with open("data/modules/password/passwords.txt") as pfile:
+            return [line.rstrip("\n") for line in pfile.readlines()]
 
 class PasswordSolver():
     def __init__(self, robot:robot_arm.RobotArm = None, knn = None, passwords = []):

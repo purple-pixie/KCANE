@@ -11,6 +11,8 @@ log = logging.getLogger(__name__)
 #==========================#
 #Useful numbers#
 a, b, c = (1, 2, 4)
+#cuts to make. cuts["red"][1] is what to do with the first red wire et c.
+#if destination & cuts[color][index] then make the cut
 cuts = {    "red"  : [0,    c,  b,a,a+c,b,a+c,a+b+c,a+b,b],
             "blue" : [0,    b,a+c,b,  a,b,b+c,    c,a+c,a],
             "black": [0,a+b+c,a+c,b,a+c,b,b+c,  a+b,  c,c] }
@@ -69,14 +71,8 @@ class Solver():
     def new(self, robot:robot_arm.RobotArm):
         return SequenceSolver(robot)
     def identify(self, robot):
-        return False
-        #below is waaaaay too generous. Needs an actual check or to go last
-        test = SequenceSolver(robot)
-        panel = test.get_panel()
-        for wire in panel:
-            if panel[wire][0] != "red":
-                return True
-        return False
+        return False, robot.grab_selected()
+        #TODO: Identify sequence
 
 class SequenceSolver():
     def __init__(self, robot:robot_arm.RobotArm):
@@ -99,10 +95,6 @@ class SequenceSolver():
             ##34 - 86 | 2 - >a
             ##70 - 114 | 3->b
 
-
-
-
-
     def test_wire(self, color, terminal:TERM):
         self.wires[color] += 1
         return terminal.value & cuts[color][self.wires[color]]
@@ -121,6 +113,7 @@ class SequenceSolver():
                 self.cut_wire(wire)
             log.info(f"next panel")
             self.next_panel()
+        return True
 
     def get_panel(self):
         panel = {}

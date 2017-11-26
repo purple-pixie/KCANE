@@ -52,7 +52,7 @@ class Solver():
     def identify(self, robot):
         #todo: identify memory
         #current labelling method is too gracious for use as id, will always find labels even if given garbage
-        return False
+        return False, robot.grab_selected()
 
 class MemorySolver():
     def __init__(self, robot:robot_arm.RobotArm):
@@ -111,7 +111,7 @@ class MemorySolver():
             self.populate_button_labels()
             disp = self.get_display_value()
             self.do_move(self.get_move_for_stage(stage, disp), stage=stage)
-
+        return True
 
     #functions for getting buttons from instructions
     def get_by_previous_label(self, stage):

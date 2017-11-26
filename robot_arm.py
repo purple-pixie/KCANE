@@ -117,10 +117,10 @@ class RobotArm:
             #self.mouseto(x, y-132)
         self.mouseto(x, y)
         #allow bomb to actually rotate on screen
-        sleep(0.5)
+        sleep(0.3)
         if dir > 3:
             mouse.release(Button.right)
-            sleep(0.1)
+            sleep(0.2)
 
     def unrotate(self):
         self.mouse_to_centre()
@@ -150,16 +150,16 @@ class RobotArm:
     def moduleto(self, x, y):
         self.mouseto(x + selected_left, y + selected_top)
 
-    def grab(self, colour = True):
-        #todo: lights out
+    def grab(self, colour = True, allow_dark = False, allow_red = False):
+        #todo: lights out / red light check
         im = self.screen.grab()
         if not colour:
             if len(im.shape) > 2:
                 return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         return im
-    def grab_selected(self, colour = True):
+    def grab_selected(self, colour = True, allow_dark = False, allow_red = False):
         """grab a screenshot of the active module"""
-        im = self.grab(colour)
+        im = self.grab(colour, allow_dark, allow_red)
         if im.shape[0] >= selected_bot:
             im = im[selected_top:selected_bot,
                    selected_left:selected_right]

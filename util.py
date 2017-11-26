@@ -1,6 +1,6 @@
 #utility functions for KCANE
 #mostly just shorthand for very regularly called functions
-
+import collections
 import cv2
 from PIL import Image
 import pytesseract
@@ -31,17 +31,19 @@ class PrintSnooper:
         self.stdout.write(s[:100])
         self.stdout.write("\n")
 
-def images_in(dir = "", flags=1, ext = ".bmp", return_names = False):
-    for im in glob.glob(f"{dir}*{ext}"):
-        if return_names: yield (naked_filename(im), cv2.imread(im, flags))
-        else: yield cv2.imread(im, flags)
+def images_in(dir = "", flags=1, ext = ".bmp", return_names = False, return_full_names = False, starts = ""):
+    starts = os.path.join(dir, starts)
+    for name in glob.glob(f"{starts}*{ext}"):
+        im = cv2.imread(name, flags)
+        if return_full_names: yield name, im
+        elif return_names: yield naked_filename(name), im
+        else: yield im
 
 def read_key(directions = True):
     key = 256
     while key > 127:
         key = cv2.waitKeyEx(0)
         if directions:
-            print(key)
             if key in ( 2490368,
                         2621440,
                         2424832,
@@ -97,8 +99,35 @@ def tess(image, config="--psm 10 digits", remove = True):
         os.remove(filename)
     return out
 
-def contour(image):
-    (im, contours, hierarchy) = cv2.findContours(image,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+def consume(iterable):
+    collections.deque(iterable, maxlen=0)
+
+def rectangles(cnts, key = lambda x,y,w,h: True):
+    """get all the bounding rectangles of the contours in cnts that satisfy filter key(*rect)"""
+    for cnt in cnts:
+        rect = cv2.boundingRect(cnt)
+        if key(*rect):
+            yield rect
+
+def contour(image, is_color=False, blur_kernel=None, draw = False,
+            return_hierarchy = False, mode=cv2.RETR_LIST, **kwargs):
+    if is_color:
+        if draw:
+            can = image.copy()
+        image = to_gray(image)
+    else:
+        if draw:
+            can = to_bgr(gray=image)
+    if blur_kernel is not None:
+        image = cv2.GaussianBlur(image, blur_kernel, 0)
+    (im, contours, hierarchy) = cv2.findContours(image,mode,cv2.CHAIN_APPROX_SIMPLE, **kwargs)
+    if draw:
+        cv2.drawContours(can, contours, -1, (0,255,0),1)
+        display(can)
+        #for c in contours:
+        #cv2.im
+    if return_hierarchy:
+        return contours, hierarchy
     return contours
 
 def get_dump_name(dir="", ext="bmp", starts=""):
@@ -132,3 +161,21 @@ def draw_label(image, centre, label, color = (0,0,0), font=cv2.FONT_HERSHEY_SIMP
     x, y = centre
     label_top_left = (x - size[0] // 2, y + size[1] //2 )
     cv2.putText(image, label, label_top_left, font, font_scale, color, thickness)
+
+def inRangePairs(im, pairs):
+    ranges = np.array(pairs, dtype="uint8")
+    ranges = ranges.transpose()
+    return inRange(im, *ranges)
+def inRange(im, lower, upper):
+    l=np.array(lower, dtype="uint8")
+    u = np.array(upper, dtype="uint8")
+    return cv2.inRange(im, l, u)
+
+def to_hsv(bgr):
+    return cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+def to_gray(bgr):
+    return cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+def to_bgr(hsv=None, gray = None):
+    if not gray is None:
+        return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
