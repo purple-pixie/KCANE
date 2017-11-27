@@ -50,6 +50,8 @@ class Solver():
         return SimpleWires(robot)
 
     def identify(self, robot):
+        ##TODO: make sure this isn't being overly restrictive
+        #seemed to miss a few
         image = robot.grab_selected()
         canvas = image.copy()
         im = to_hsv(image)
@@ -58,10 +60,12 @@ class Solver():
         rects = list(rectangles(cnts, lambda x,y,w,h: 12 < w < 22 and 10 < h < 18 and 24 < x < 30))
         for x, y, w, h in rects:
             cv2.rectangle(canvas, (x, y), (x+w,y+h), (0,0,255),1)
-        dump = np.hstack((image, canvas))
-        dump_image(dump, dir="simple", starts="ident")
         count = len(rects)
-        return 3 < count < 7, canvas
+        if count == 6:
+            return 100, canvas
+        if count < 3 or count > 6:
+            return False, canvas
+        return 50, canvas
 
 def last(li, colour):
     log.debug(f'getting last instance of {colour}')

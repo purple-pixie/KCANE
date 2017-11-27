@@ -344,7 +344,7 @@ class PasswordSolver():
             return "?"
         return label_from_float(ret)
     def update_image(self):
-        self.image = get_lcd(self.robot.grab_selected(0))
+        self.image = get_lcd(self.robot.grab_selected(0, allow_dark=True))
             #dump_image(self.image, "lcds/")
             #self.image = cv2.imread(next(self.ims), 0)
 

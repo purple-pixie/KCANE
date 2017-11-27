@@ -6,13 +6,14 @@ from util import *
 from modules import solvers
 from bomb_drawer import BombDrawer
 import logging
-logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG)
+logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG, format='%(asctime)s.%(msecs)03d %(message)s')
 log = logging.getLogger(__name__)
-
+log.info("started")
 module_images = dict(images_in("images/", return_names=True))
 
 class Robot():
-    def __init__(self, screen):
+    def __init__(self, screen, safe=False):
+        self.safe = safe
         self.screen = screen
         self.arm = RobotArm(screen, robot=self)
         self.modules = [["unknown"] * 6, ["unknown"] * 6]
@@ -23,9 +24,10 @@ class Robot():
         self.battery_count = 0
         self.gubbins = {}
         self.serial_odd = -1
-        self.serial_vowel = -1
+        self.serial_vowel = 0
+        self.strikes = 0
     def peek(self):
-        self.examine_gubbins()
+        #self.examine_gubbins()
         self.analyse_bomb()
 
 
@@ -69,8 +71,8 @@ class Robot():
 
                 self.arm.rclick(after=0.45)
 
-    #185, 303: 104x54
-
+    def get_strikes(self):
+        return self.strikes
 
     def examine_gubbins(self):
         self.arm.wake_up()
@@ -114,6 +116,10 @@ class Robot():
             self.gubbins[i] = eval(i)
         print(f"Gubbins results: {self.gubbins}")
 
+    def serial_error(self):
+        self.serial_vowel = not self.serial_vowel
+        self.strikes += 1
+
     def serial_is_odd(self):
         log.info("checking oddity")
         if self.serial_odd == -1:
@@ -148,11 +154,16 @@ class Robot():
         self.analyse_face()
         #print(f"active modules: {self.modules}")
 
+    def identify(self, do_show=False):
+        claims = sorted(self.get_identity_claims(do_show))
+        if len(claims):
+            return claims[0][1]
 
-    def identify(self, do_show = False):
+
+    def get_identity_claims(self, do_show = False):
         im = self.arm.grab()
         static_screen = screen.Screen(image=im)
-        fake_arm = RobotArm(static_screen)
+        fake_arm = RobotArm(static_screen, self)
         #first check if it's already solved
         indicator = to_hsv(fake_arm.grab_selected()[:23 , 130:])
         green = inRangePairs(indicator, [(58, 74), (222, 255), (204, 251)])
@@ -165,12 +176,19 @@ class Robot():
             return "solved"
        #probably have enough dumps of centred modules now
        #dump_image(im, "fail", starts="identify")
+        selected = fake_arm.grab_selected()
         for module in solvers:
-            id, img = solvers[module].identify(fake_arm)
+            acc, img = solvers[module].identify(fake_arm)
             if do_show:
-                display(img, module)
-            if id:
-                return module
+                # todo: draw these more sensibly
+                # lump them all together?
+                display(img, f"{module}", wait_forever=False)
+            if acc:
+                log.info(f"{module} identified - confidence: {acc}")
+                dump = np.hstack((selected, img))
+                if not self.safe: dump_image(dump, dir="ident", starts=module)
+                yield (acc, module)
+
 
 
     def watch(self):
@@ -179,7 +197,7 @@ class Robot():
         while 1:
             im = self.arm.grab_selected()
             for base in ims:
-                if np.sum(cv2.absdiff(im, base)) < 6000:
+                if np.sum(cv2.absdiff(im, base)) < 100 * 255:
                     break
             else:
                 ims.append(im)
@@ -187,19 +205,28 @@ class Robot():
 
 def main():
     s = screen.Screen(2)
-    s = screen.Screen(image_path="img2.bmp")
+    #s = screen.Screen(image_path="img2.bmp")
+    #if 1:
+    #for im in images_in("dump/fail", starts="ident"):
+    if 0:
+        fake = screen.Screen(image_path="dump/fail/identify51.bmp")
+        fake = screen.Screen(image_path="dump/watched/img49.bmp")
+        fake = screen.Screen(image=im)
+        r = Robot(fake, safe=True)
+        p=solvers["simon_says"].new(r.arm)
+        #r.identify(True)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        #return
+        #continue
     r = Robot(s)
-    r.identify(True)
-    #todo; Draw stuff
-    #we like drawing
-    #r.arm.goto(0,0.2)
-    #p = solvers["simple_wires"]
-    #print(p.identify(r.arm))
-    #p.new(r.arm).solve()
-    #cv2.waitKey(0)
-    #return
+    p = solvers["simon_says"].new(r.arm)
+    p.solve()
+    return
     #r.watch()
+ #  r.defuse_bomb()
     try:
+       # print(1/0)
         r.peek()
         r.defuse_bomb()
     except:

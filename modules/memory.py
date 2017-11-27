@@ -10,6 +10,8 @@ from PIL import Image
 
 import robot_arm
 from util import *
+import logging
+log = logging.getLogger(__name__)
 
 
 #======================#
@@ -50,9 +52,14 @@ class Solver():
     def new(self, robot:robot_arm.RobotArm):
         return MemorySolver(robot)
     def identify(self, robot):
-        #todo: identify memory
-        #current labelling method is too gracious for use as id, will always find labels even if given garbage
-        return False, robot.grab_selected()
+        im = robot.grab_selected().copy()
+        hsv = to_hsv(im)
+        mask = inRangePairs(hsv, [(17, 24), (40, 125), (134, 255)])
+        cnts = contour(mask,  draw=False, mode=cv2.RETR_EXTERNAL)
+        rects = list(rectangles(cnts, lambda x,y,w,h: 18<w<28 and 35<h<45))
+        for x,y,w,h in rects:
+            cv2.rectangle(im, (x,y), (x+w,y+h), (0,0,255), 1)
+        return len(rects) == 4, im
 
 class MemorySolver():
     def __init__(self, robot:robot_arm.RobotArm):
@@ -67,15 +74,14 @@ class MemorySolver():
         #LOG#print(f"pressing button at {pos+1}, labelled {move[1]+1}")
         self.moves[stage] = move
         self.robot.moduleto(*button_centre(pos))
-        self.robot.click(after=4)
-
+        self.robot.click(after=4 if stage < 4 else 0)
 
     def update_image(self):
         self.image = self.robot.grab_selected(0)
 
     def get_move_for_stage(self, stage, disp):
         """Get the correct button position to press given stage and the number on the display (disp)"""
-        #LOG#print(f"stage is {stage+1}, disp shows {disp+1}")
+        log.debug(f"stage is {stage+1}, disp shows {disp+1}")
         if stage == 0:
             if disp < 2:
                 return 1
@@ -110,7 +116,9 @@ class MemorySolver():
         for stage in range(5):
             self.populate_button_labels()
             disp = self.get_display_value()
-            self.do_move(self.get_move_for_stage(stage, disp), stage=stage)
+            move = self.get_move_for_stage(stage, disp)
+            log.debug(f"pressing button {move+1} (labelled {self.labels[move]})")
+            self.do_move(move, stage=stage)
         return True
 
     #functions for getting buttons from instructions
@@ -131,7 +139,9 @@ class MemorySolver():
         """get the value displayed on the display"""
         region = self.get_display_region()
         _, image = cv2.threshold(region, 200, 255, cv2.THRESH_BINARY)
-        cnt = contour(image)[0]
+        cnt = contour(image,mode=cv2.RETR_EXTERNAL)[0]
+        cv2.drawContours(region, [cnt],0,(0,0,0),0)
+        #display(region)
         return contour_to_value(cnt)
 
     def get_button_region(self, pos):
@@ -153,11 +163,13 @@ class MemorySolver():
         for i, label in enumerate(labels):
             #this is the Nth button by length, so retrieve its label from the list of labels in length order
             self.labels[label[1]] = labels_by_length[i]
+        log.debug(f"labels: {self.labels}")
 
     def get_label_lengths(self):
         """get the arc lengths of contours on the 4 buttons (for identifying)"""
         for pos in range(4):
-            image = otsu(self.get_button_region(pos))
-            cnt = contour(image)[1]
+            image = 255 - otsu(self.get_button_region(pos))
+            #display(image, str(pos), wait_forever=False)
+            cnt = contour(image, mode=cv2.RETR_EXTERNAL)[0]
             yield (cv2.arcLength(cnt, False), pos, contour_to_value(cnt))
 

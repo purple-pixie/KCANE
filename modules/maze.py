@@ -2,6 +2,8 @@ from enum import Enum
 import numpy as np
 import robot_arm
 from util import *
+import logging
+log = logging.getLogger(__name__)
 
 
 #======================#
@@ -56,32 +58,9 @@ class Solver():
     def new(self, robot : robot_arm.RobotArm):
         return MazeSolver(robot, self.mazes)
     def identify(self, robot: robot_arm.RobotArm):
-        image = robot.grab_selected()
-        canvas = image.copy()
-        image = image[36:36+im_height, 30:30+im_width]
-        import itertools
-        #there's bound to be an elegant way to do this without for loops
-        #right now I can't think of it
-        maze_id = -1
-        marks = []
-        for x, y in itertools.product(range(6), range(6)):
-            im = image[14 * y:14 * (y + 1), 14 * x:14 * (x + 1)]
-            green = np.sum(im[:,:,1]>150)
-            if green > 25:
-                cv2.rectangle(canvas, (14*x + 30,14*y + 36),(14 * (x+1) + 28, 14 * (y+1) + 34), (0,255,0),1)
-                marks.append((x, y))
-                # can break out here for efficiency, but will leave canvas only partly rendered
-                #if len(marks) > 2:
-                #   return False, canvas
-            else:
-                cv2.rectangle(canvas, (14*x + 30,14*y + 36),(14 * (x+1) + 28, (14 * (y+1) + 34)), (0,0,0),1)
-        if len(marks) != 2:
-            return False, canvas
-        #we found exactly two markers ... still, we should make sure they are in valid places
-        if marks[0] not in markers or marks[1] not in markers:
-            return False, canvas
-        #they both were. Let's just make sure they both match the same maze
-        return markers[marks[0]] == markers[marks[1]], canvas
+        test = self.new(robot)
+        #todo debug draw maze ident
+        return test.maze is not None and test.start is not None and test.target is not None and 100, robot.grab_selected()
 
 #======================#
 #solver proper
@@ -93,36 +72,48 @@ class MazeSolver():
         self.start = None
         self.target = None
 
+        maze_id = -1
+        self.maze = None
         for lower, upper, title in boundaries:
             image = self.image.copy()
-            lower = np.array(lower, dtype="uint8")
-            upper = np.array(upper, dtype="uint8")
-            mask = cv2.inRange(image, lower, upper)
-            output = cv2.bitwise_and(image, image, mask=mask)
-            im=cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
-            cnts = contour(im)
-            im = cv2.cvtColor(im, cv2.COLOR_GRAY2BGR)
+           #TODO: identify drawings | canvas = image
+            output = inRange(image, lower, upper)
+         #  lower = np.array(lower, dtype="uint8")
+         #  upper = np.array(upper, dtype="uint8")
+         #  mask = cv2.inRange(image, lower, upper)
+         #  output = cv2.bitwise_and(image, image, mask=mask)
+            cnts = contour(output,  blur_kernel=(3,3), is_color=False, draw=False, mode=cv2.RETR_EXTERNAL)
             ##can divide by zero given a crap image. make sure we identified it successfully first
             ## Or just give it a try/catch
-            maze_id = -1
             marker_x, marker_y = (0,0)
-            for cnt in cnts:
-                cv2.drawContours(im, [cnt], -1, random_color(), 2)
-                M = cv2.moments(cnt)
-                cx = int(M['m10'] / M['m00'])
-                cy = int(M['m01'] / M['m00'])
-                x, y = image_to_maze_coords(cx, cy)
+            #for cnt in cnts:
+            for x, y, w, h in rectangles(cnts): #, lambda x,y,w,h: )
+                #cv2.drawContours(image, [cnt], -1, random_color(), 2)
+                maze_x, maze_y = image_to_maze_coords(x+w//2, y+h//2)
                 if title == "red":
-                    self.target = (x, y)
+                    if self.target is not None and self.target != (maze_x, maze_y):
+                        log.debug("two targets found, fail")
+                        self.target = None
+                        break
+                    self.target = (maze_x, maze_y)
                 elif title == "white":
-                    self.start = (x, y)
+                    if self.start is not None and self.start != (maze_x, maze_y):
+                        log.debug("two starts found, fail")
+                        self.start = None
+                        break
+                    self.start = (maze_x, maze_y)
                 else:
+                    if (maze_x,maze_y) not in markers:
+                        log.debug(f"marker not recognised: {maze_x,maze_y}")
+                        break
                     #check that we aren't being told contradictory information
                     if maze_id > -1:
-                        if markers[(x, y)] != maze_id:
-                            print(f"Old marker {marker_x, marker_y} says maze id {maze_id}, new marker {x, y} is {markers[(x,y)]}!")
-                    marker_x, marker_y = x, y
-                    maze_id = markers[(x, y)]
+                        if markers[(maze_x, maze_y)] != maze_id:
+                            log.debug(f"Old marker {marker_x, marker_y} says maze id {maze_id}, new marker {maze_x, maze_y} is {markers[(maze_x,maze_y)]}!")
+                            maze_id = -1
+                            break
+                    marker_x, marker_y = maze_x, maze_y
+                    maze_id = markers[(maze_x, maze_y)]
                     self.maze = mazes[maze_id]
 
     def update_image(self):
@@ -172,9 +163,9 @@ class abstractmaze:
             #strip off the first 'move', because it doesn't have a direction / isn't a real move
             return path[1:]
         else:
-            print("No path found")
+            log.info("No path found!")
             return []
-        
+
     def draw_move(self, x, y, xx, yy, failed = False):
         color = (0,0,230) if failed else (20,230,20)
         cv2.line(self.image, maze_to_image_coords(x, y), maze_to_image_coords(xx, yy), color)

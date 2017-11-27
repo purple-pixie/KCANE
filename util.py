@@ -51,17 +51,24 @@ def read_key(directions = True):
                         ):  # up, down, left, right
                 return key
     return key&0xFF
+def hstack_pad(a, b):
+    if a is None or a.shape[0] == 0:
+        return b
+    if a.shape[0] == b.shape[0]:
+        return np.hstack((a,b))
+    pad = a.shape[0] - b.shape[0]
+    padded = np.pad(b,((pad,0),(0,0), (0,0)),mode="constant")
+    return np.hstack((a,padded))
 
-def display(c, text="image", do_wait = True, scale = None):
+
+def display(c, text="image", wait_forever = True, scale = None):
     if not scale is None:
         c = cv2.resize(c, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
     cv2.imshow(text, c)
-    if do_wait:
-        cv2.waitKey(0)
-        #cv2.destroyAllWindows()
+    cv2.waitKey(0 if wait_forever else 1)
 
 def read_and_display(*args, **kwargs):
-    kwargs["do_wait"] = False
+    kwargs["wait_forever"] = False
     display(*args, **kwargs)
     return read_key()
 
@@ -102,13 +109,27 @@ def tess(image, config="--psm 10 digits", remove = True):
 def consume(iterable):
     collections.deque(iterable, maxlen=0)
 
+def circles(cnts, key = lambda c: True):
+    """return all circles in """
+    for cnt in cnts:
+        c = cv2.minEnclosingCircle(cnt)
+        (a, b), r = c
+        if key(c):
+            yield (int(x) for x in (a,b,r))
+
+def rotated(image, angle):
+    center = tuple(np.array(image.shape[:2])/2)
+    M = cv2.getRotationMatrix2D(center,angle,1.0)
+    return cv2.warpAffine(image, M, image.shape[:2],flags=cv2.INTER_LINEAR)
+
 def rectangles(cnts, key = lambda x,y,w,h: True):
     """get all the bounding rectangles of the contours in cnts that satisfy filter key(*rect)"""
     for cnt in cnts:
         rect = cv2.boundingRect(cnt)
         if key(*rect):
             yield rect
-
+def blur(image, kernel=(3,3)):
+    return cv2.GaussianBlur(image, kernel, 0)
 def contour(image, is_color=False, blur_kernel=None, draw = False,
             return_hierarchy = False, mode=cv2.RETR_LIST, **kwargs):
     if is_color:
@@ -123,6 +144,7 @@ def contour(image, is_color=False, blur_kernel=None, draw = False,
     (im, contours, hierarchy) = cv2.findContours(image,mode,cv2.CHAIN_APPROX_SIMPLE, **kwargs)
     if draw:
         cv2.drawContours(can, contours, -1, (0,255,0),1)
+        display(image)
         display(can)
         #for c in contours:
         #cv2.im
@@ -179,3 +201,4 @@ def to_bgr(hsv=None, gray = None):
     if not gray is None:
         return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+

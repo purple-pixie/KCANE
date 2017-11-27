@@ -92,6 +92,7 @@ class RobotArm:
         """rotate the bomb - does not let go of right click. Do that yourself
         dir 0-3 rotate 90 degrees left, up, right, down
         dir 4 and 5 rotate 180 degrees left and right"""
+        if self.robot.safe: return
         self.mouse_to_centre()
         mouse.press(Button.right)
         #allow game to realise we've clicked
@@ -117,12 +118,13 @@ class RobotArm:
             #self.mouseto(x, y-132)
         self.mouseto(x, y)
         #allow bomb to actually rotate on screen
-        sleep(0.3)
+        sleep(0.2)
         if dir > 3:
             mouse.release(Button.right)
             sleep(0.2)
 
     def unrotate(self):
+        if self.robot.safe:return
         self.mouse_to_centre()
         sleep(0.5)
         mouse.release(Button.right)
@@ -138,6 +140,7 @@ class RobotArm:
     def mouse_to_centre(self):
         self.mouseto(410, 295)
     def mouseto(self, x, y):
+        if self.robot.safe:return
         mouse.position = self.screen.real_coords(x, y)
         #log#print(f"mouse now at {mouse.position}")
     def mouse_to_module(self, mod):
@@ -160,12 +163,18 @@ class RobotArm:
     def grab_selected(self, colour = True, allow_dark = False, allow_red = False):
         """grab a screenshot of the active module"""
         im = self.grab(colour, allow_dark, allow_red)
+        #standard case - grab the region
         if im.shape[0] >= selected_bot:
             im = im[selected_top:selected_bot,
                    selected_left:selected_right]
+        #special case for loading screens that are already cropped to selected region
+        #(or at least to the right height, assume there might be more junk hstack()ed on afterwards
+        if im.shape[0] == selected_bot-selected_top:
+            im = im[:,:selected_right-selected_left]
         return im
 
     def click(self, before=0., after=0., button=Button.left):
+        if self.robot.safe: return sleep(after)
         mouse.press(button)
         if before:
             sleep(before)
