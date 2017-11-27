@@ -53,7 +53,7 @@ def read_key(directions = True):
     return key&0xFF
 def hstack_pad(a, b):
     if a is None or a.shape[0] == 0:
-        return b
+        return b.copy()
     if a.shape[0] == b.shape[0]:
         return np.hstack((a,b))
     pad = a.shape[0] - b.shape[0]
@@ -172,7 +172,7 @@ def dump_image(img, dir="test/", announce = True, starts = "img"):
                 print(f"dumping to {filename}")
         cv2.imwrite(filename, img)
 
-def draw_label(image, centre, label, color = (0,0,0), font=cv2.FONT_HERSHEY_SIMPLEX,
+def draw_label(image, centre=None, label="<label>", color = (0,0,0), font=cv2.FONT_HERSHEY_SIMPLEX,
                font_scale=.5, thickness=1):
     """Draws label for point to a given image.
     Returns copy of image, original is not modified.
@@ -180,6 +180,8 @@ def draw_label(image, centre, label, color = (0,0,0), font=cv2.FONT_HERSHEY_SIMP
     # http://docs.opencv.org/modules/core/doc/drawing_functions.html#gettextsize
     # Returns bounding box and baseline -> ((width, height), baseline)
     size, baseline = cv2.getTextSize(label, font, font_scale, thickness)
+    if centre is None:
+        centre = image.shape[0] // 2, image.shape[1] // 2
     x, y = centre
     label_top_left = (x - size[0] // 2, y + size[1] //2 )
     cv2.putText(image, label, label_top_left, font, font_scale, color, thickness)

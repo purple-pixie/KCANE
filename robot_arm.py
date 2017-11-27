@@ -8,6 +8,8 @@ import bomb_examiner
 from util import *
 mouse = Controller()
 
+import logging
+log = logging.getLogger(__name__)
 
 def sleep(dur: float, abort=True):
     # seconds to milis
@@ -63,6 +65,25 @@ class RobotArm:
         self.rclick(after = 0.25)
         self.pick_up()
 
+    def indicator_state(self, image = None):
+        """the solved state of the indicator on the currently selected bomb
+        (or from image)
+        assumes a currently selected module
+        1 for solved, -1 for red (warning light) or 0 for unlit"""
+        if image is None:
+            image = self.grab_selected(allow_dark=True)
+        indicator = to_hsv(image[:23 , 130:])
+        green = inRangePairs(indicator, [(58, 74), (222, 255), (204, 251)])
+        if np.sum(green) > 2550:
+            log.debug("it is solved")
+            dump_image(indicator, starts="green", dir="indicator")
+            return 1
+        red = inRangePairs(indicator, [(167, 179), (175, 255), (208, 255)]) # red indicator#
+        if np.sum(red) > 2550:
+            dump_image(indicator, starts="red", dir="indicator")
+            return -1
+        dump_image(indicator, starts="none", dir="indicator")
+        return 0
 
     def draw(self):
         if not self.robot is None:

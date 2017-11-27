@@ -51,7 +51,7 @@ class SimonSays():
                     return COLOR(c)
                 #log.debug(f"{COLOR(c)} | {vmean}")
                 # cv2.imwrite("s.bmp",s)
-                display(to_bgr(hsv), wait_forever=False)
+                #display(to_bgr(hsv), wait_forever=False)
         if timeout > 1:
             log.debug(f"timed out waiting for a lit button")
         return None
@@ -148,7 +148,7 @@ class SimonSays():
                 return True
             if np.sum(red) > 2550:
                 log.info("I screwed up. Assuming the serial was wrong and restarting.")
-                self.robot.robot.serial_error()
+                self.robot.robot.serial_vowel_error()
                 sleep(1)
                 return self.solve()
             log.debug(f"solve post-stage sleep")
@@ -165,20 +165,21 @@ class Solver():
         return x
     def identify(self, robot):
         image = robot.grab_selected()
+        dump_image(image)
         hsv  = to_hsv(image)
         h, s, v = (hsv[...,i] for i in range(3))
         #sanity adjust hue so that reds are all together:
         sanity_mask = h < 5
         h[sanity_mask] = 179
-        for c, (x, y), hue in enumerate(zip(button_regions, button_hues)):
+        for c, ((x, y), hue) in enumerate(zip(button_regions, button_hues)):
             #x, y = button_regions[color]
-            hue = button_hues[c]
+            #hue = button_hues[c]
             cv2.rectangle(image, (x, y), (x+20, y+20), (0,0,0),3)
             diff = abs(hue-np.mean(h[y:y+20,x:x+20]))
             if diff > 5:
                 color = COLOR(c).name
                 log.debug(f"{color} button doesn't look very {color} (diff: {diff})")
-            return False, image
+                return False, image
         return 200, image
 
 

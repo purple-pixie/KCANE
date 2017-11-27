@@ -27,7 +27,7 @@ class Robot():
         self.serial_vowel = 0
         self.strikes = 0
     def peek(self):
-        #self.examine_gubbins()
+        self.examine_gubbins()
         self.analyse_bomb()
 
 
@@ -116,7 +116,11 @@ class Robot():
             self.gubbins[i] = eval(i)
         print(f"Gubbins results: {self.gubbins}")
 
-    def serial_error(self):
+    def serial_digit_error(self, made_error = False):
+        self.serial_digit = not self.serial_digit
+        self.strikes += made_error
+
+    def serial_vowel_error(self):
         self.serial_vowel = not self.serial_vowel
         self.strikes += 1
 
@@ -204,29 +208,29 @@ class Robot():
                 dump_image(im,"watched")
 
 def main():
-    s = screen.Screen(2)
     #s = screen.Screen(image_path="img2.bmp")
     #if 1:
     #for im in images_in("dump/fail", starts="ident"):
     if 0:
-        fake = screen.Screen(image_path="dump/fail/identify51.bmp")
         fake = screen.Screen(image_path="dump/watched/img49.bmp")
-        fake = screen.Screen(image=im)
+        fake = screen.Screen(image_path="dump/test/img38.bmp")
+        #fake = screen.Screen(image=im)
         r = Robot(fake, safe=True)
-        p=solvers["simon_says"].new(r.arm)
-        #r.identify(True)
+        #p=solvers["simon_says"].new(r.arm)
+        #p.identify()
+        r.identify(True)
         cv2.waitKey(0)
         cv2.destroyAllWindows()
+        return
         #return
         #continue
+
+    s = screen.Screen(2)
     r = Robot(s)
-    p = solvers["simon_says"].new(r.arm)
-    p.solve()
-    return
     #r.watch()
- #  r.defuse_bomb()
+    #  r.defuse_bomb()
     try:
-       # print(1/0)
+        # print(1/0)
         r.peek()
         r.defuse_bomb()
     except:
