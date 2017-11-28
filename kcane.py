@@ -181,18 +181,21 @@ class Robot():
        #probably have enough dumps of centred modules now
        #dump_image(im, "fail", starts="identify")
         selected = fake_arm.grab_selected()
+        disp=None
         for module in solvers:
             acc, img = solvers[module].identify(fake_arm)
             if do_show:
                 # todo: draw these more sensibly
                 # lump them all together?
-                display(img, f"{module}", wait_forever=False)
+                scaled = cv2.resize(img, (100,100))
+                disp = hstack_pad(disp, scaled)#, f"{module}", wait_forever=False)
             if acc:
                 log.info(f"{module} identified - confidence: {acc}")
                 dump = np.hstack((selected, img))
                 if not self.safe: dump_image(dump, dir="ident", starts=module)
                 yield (acc, module)
-
+        if do_show:
+            display(disp)
 
 
     def watch(self):
@@ -208,23 +211,6 @@ class Robot():
                 dump_image(im,"watched")
 
 def main():
-    #s = screen.Screen(image_path="img2.bmp")
-    #if 1:
-    #for im in images_in("dump/fail", starts="ident"):
-    if 0:
-        fake = screen.Screen(image_path="dump/watched/img49.bmp")
-        fake = screen.Screen(image_path="dump/test/img38.bmp")
-        #fake = screen.Screen(image=im)
-        r = Robot(fake, safe=True)
-        #p=solvers["simon_says"].new(r.arm)
-        #p.identify()
-        r.identify(True)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        return
-        #return
-        #continue
-
     s = screen.Screen(2)
     r = Robot(s)
     #r.watch()
@@ -246,5 +232,29 @@ def main():
 
 from bomb_examiner import *
 
+def test():
+    #s = screen.Screen(image_path="img2.bmp")
+    #if 1:
+    for im in images_in("dump/fail", starts=""):
+        #fake = screen.Screen(image_path="dump/watched/img49.bmp")
+        #fake = screen.Screen(image_path="dump/test/img38.bmp")
+        fake = screen.Screen(image=im)
+        r = Robot(fake, safe=True)
+       # r = Robot(screen.Screen(2))
+        #r.arm.wake_up()
+        #time.sleep(0.2)
+        #r.arm.goto(5)
+        #p=solvers["morse"].new(r.arm)
+        #p.solve()
+        r.identify(True)
+       # cv2.waitKey(0)
+       # cv2.destroyAllWindows()
+       # return
+        #return
+        #continue
+
+
+
 if __name__ == "__main__":
-    main()
+    test()
+    #main()
