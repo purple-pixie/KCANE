@@ -178,7 +178,7 @@ def find_serial(bgr, hsv):
             text = tess(mask, config="--psm 8 letters", remove=False)
             digits = tess(mask, config="--psm 8 digits", remove=False)
             dump_image(mask, dir="serial")
-            print(f"Tess: {text} | {digits}")
+            #print(f"Tess: {text} | {digits}")
 
             #TODO: Do this properly and be less of a hack
             #interpret the last letter as a digit and the rest as letters

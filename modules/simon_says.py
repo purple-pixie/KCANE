@@ -96,10 +96,24 @@ class SimonSays():
         vowel = self.robot.robot.serial_has_vowel()
         strikes = self.robot.robot.get_strikes()
         #vowel, strikes = 1, 1
-        log.debug(f"{'Has' if vowel else 'No'} vowel, {strikes} strikes | {color.name}->")
-        target = moves[vowel][strikes][color.value]
+        log.debug(f"vowel: {vowel}, {strikes} strikes | {color.name}->")
+        target = moves[vowel][strikes > 0][color.value]
         log.debug(f"{target.name}")
         return target
+
+    def draw(self, stage, seq):
+        y = stage * 30 + 10
+        for i, color in enumerate(seq):
+            x = i * 30 + 10
+            col = (0,0,255)
+            if color == COLOR.blue:
+                col = (255,0,0)
+            elif color == COLOR.yellow:
+                col = (0,255,255)
+            elif color == COLOR.green:
+                col = (0,255,0)
+            cv2.rectangle(self.canvas, (x,y), (x+20,y+20), col, -1)
+        self.robot.draw_module(self.canvas)
 
     def solve_stage(self, steps):
         sequence = []
@@ -116,18 +130,22 @@ class SimonSays():
             if button is None:
                 #will get here if we lose track in the middle of a loop too.
                 #solver should try once more on the same stage
-                return False
+                return None
             sequence.append(self.translate(button))
 
             #give it long enough to go out again
+        self.draw(steps, sequence)
         log.debug(f"Sequence: {sequence}")
         for i, color in enumerate(sequence):
             self.robot.moduleto(*button_regions[color.value])
-            self.robot.click(after=0.1)
-            #dump_image(self.robot.grab_selected(),dir="interesting",starts="click")
+            dump_image(self.robot.grab_selected(),dir="interesting",starts="pre_click")
+            self.robot.click(before=0.5) #, after=0.1)
+            dump_image(self.robot.grab_selected(), dir="interesting", starts="post_click")
         return True
-    def solve(self):
+    def solve(self, retry = True):
+        self.canvas = np.full((170, 170, 3), 120, dtype="uint8")
         #TODO: fix the timing with simon
+        #also need to remember that the solution should match the last stage plus a move
         #something goes wrong on later runs, looks like it is missing an input maybe
         #possibly dropping a click
         #needs a proper look at
@@ -136,8 +154,9 @@ class SimonSays():
         #see if they stay lit for over-long (when a colour repeats)
         #or if diff since last light up is really big (cycle repeats. must have missed something)
         for stage in range(6):
-            if not self.solve_stage(stage):
-                break
+            if self.solve_stage(stage) is None:
+                if not self.solve_stage(stage):
+                    break
             log.debug(f"solve pre-stage nap")
             sleep(0.2)
             indicator = to_hsv(self.robot.grab_selected()[:23 , 130:])
@@ -147,10 +166,14 @@ class SimonSays():
                 log.debug("woo, it's solved")
                 return True
             if np.sum(red) > 2550:
-                log.info("I screwed up. Assuming the serial was wrong and restarting.")
-                self.robot.robot.serial_vowel_error()
-                sleep(1)
-                return self.solve()
+                if retry:
+                    log.info("I screwed up. Assuming the serial was wrong and restarting.")
+                    self.robot.robot.serial_vowel_error()
+                    sleep(2)
+                    return self.solve(retry=False)
+                else:
+                    log.info("I really screwed up, aborting")
+                    return False
             log.debug(f"solve post-stage sleep")
             sleep(.5)
         else:
@@ -164,6 +187,8 @@ class Solver():
         x = SimonSays(robot)
         return x
     def identify(self, robot):
+        #TODO - Simon seems to be missing idents when a button is lit.
+        #check for that explicitly or use a heuristic that allows for it
         image = robot.grab_selected()
         dump_image(image)
         hsv  = to_hsv(image)
@@ -176,7 +201,7 @@ class Solver():
             #hue = button_hues[c]
             cv2.rectangle(image, (x, y), (x+20, y+20), (0,0,0),3)
             diff = abs(hue-np.mean(h[y:y+20,x:x+20]))
-            if diff > 5:
+            if diff > 15:
                 color = COLOR(c).name
                 log.debug(f"{color} button doesn't look very {color} (diff: {diff})")
                 return False, image

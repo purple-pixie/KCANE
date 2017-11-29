@@ -6,7 +6,7 @@ from util import *
 from modules import solvers
 from bomb_drawer import BombDrawer
 import logging
-logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG, format='%(asctime)s.%(msecs)03d %(message)s')
+logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG) #, format='%(asctime)s.%(msecs)03d %(message)s')
 log = logging.getLogger(__name__)
 log.info("started")
 module_images = dict(images_in("images/", return_names=True))
@@ -62,12 +62,22 @@ class Robot():
                         print(f"Already solved, ignoring")
                     else:
                         print(f"Looks like {module}. Defusing")
+                        #TODO: derive solved from the indicator and don't rely on module
+                        #self.arm.indicator_state()
                         solved = solvers[module].new(self.arm).solve()
-                        if solved:
-                            print(f"Solved it")
+                        state = self.arm.indicator_state()
+                        if state == 0:
+                            #if state initially gray, try sleeping for a bit and testing again
+                            sleep(0.2)
+                            state = self.arm.indicator_state()
+                        if state == -1:
+                            log.warning(f"Struck out on {module}!")
+                            self.draw_module(module_images["failed"], nonwhite=True)
+                        if state == 0:
+                            log.info(f"Module {module} says solved but module is unfinished")
+                        if state == 1:
+                            log.info(f"Solved {module}")
                             self.draw_module(module_images["solved"], nonwhite=True)
-                        else:
-                            print(f"Failed")
 
                 self.arm.rclick(after=0.45)
 
@@ -102,7 +112,7 @@ class Robot():
                     serial = find_serial(warped, hsv)
                     if serial != "":
                         print(f"Found serial: {serial}")
-                        self.serial_vowel = len(set("aeiou")&set(serial))
+                        self.serial_vowel = len(set("AEIOU")&set(serial))
                         try:
                             self.serial_odd = int(serial[-1])%2
                         except ValueError:
@@ -138,6 +148,8 @@ class Robot():
         if self.serial_vowel == -1:
             #read serial
             pass
+            print("it really shouldnt be")
+            self.serial_vowel = 0
         return self.serial_vowel
     def draw(self):
         self.drawer.draw()
@@ -177,6 +189,7 @@ class Robot():
         if np.sum(green) > 2550:
             #at least 10 pixels in the top right matched our (very) bright green mask
             #that's solved
+            #TODO: split ID and solved-flag
             return "solved"
        #probably have enough dumps of centred modules now
        #dump_image(im, "fail", starts="identify")
@@ -235,7 +248,7 @@ from bomb_examiner import *
 def test():
     #s = screen.Screen(image_path="img2.bmp")
     #if 1:
-    for im in images_in("dump/fail", starts=""):
+    for im in images_in("dump/ident", starts="complex_wires7"):
         #fake = screen.Screen(image_path="dump/watched/img49.bmp")
         #fake = screen.Screen(image_path="dump/test/img38.bmp")
         fake = screen.Screen(image=im)
@@ -256,5 +269,5 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
-    #main()
+    #test()
+    main()

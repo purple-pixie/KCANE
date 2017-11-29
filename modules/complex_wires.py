@@ -98,7 +98,26 @@ class ComplexWires():
         self.get_wires()
         self.valid = True
 
+    def draw(self):
+        canvas = np.full((140,140,3),130, dtype="uint8")
+        y = 20
+        for i in range(6):
+            x = i * 20 + 10
+            led_col = (0,255,255) if self.leds[i] else (0,0,0)
+            cv2.circle(canvas, (x, y), 5, led_col, -1)
+            if self.wires[i] & WIRE.blue.value:
+                cv2.line(canvas,(x-2,y+5), (x-2,y+100), (255,0,0), 2)
+            if self.wires[i] & WIRE.red.value:
+                cv2.line(canvas,(x+2,y+5), (x+2,y+100), (0,0,255), 2)
+            if self.wires[i] == WIRE.white.value:
+                cv2.line(canvas,(x,y+5), (x,y+100), (255,255,255), 2)
+            cv2.rectangle(canvas, (x-10,y+100), (x+10,y+120), (30,30,30), 1)
+            if self.stars[i]:
+                draw_label(canvas, (x,y+110), "*")
+        self.robot.draw_module(canvas)
+
     def solve(self):
+        self.draw()
         moves = (list(self.get_cuts()))
         move_dict = {a:[] for a in "BCDPS"}
         for v, k in moves:
@@ -139,7 +158,7 @@ class ComplexWires():
         for wire in indexes:
             log.info(f"Cutting wire {wire+1}")
             self.robot.moduleto(23+16*wire, 29)
-            self.robot.click(after=0.05)
+            self.robot.click(before=0.1, after=0.05)
         pass
 
     def get_cuts(self):
@@ -153,12 +172,10 @@ class ComplexWires():
             yield i, cut
 
     def get_stars(self):
-        hsv = self.image
-        #dont need the indicator
-        hsv[:23 , 130:] = 0
+        hsv = self.image[120:]
         mask = blur(inRangePairs(hsv, [(9, 94), (85, 238), (87, 202)]))
         (im, cnts, hierarchy) = cv2.findContours(mask
-                                 ,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_SIMPLE)
+                                 ,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_SIMPLE, offset=(0,120))
         x = 6
         if not len(cnts):
             log.debug(f"found no terminals, not complex")
@@ -204,11 +221,12 @@ class ComplexWires():
             for color, pairs in wire_ranges.items():
                 mask = inRangePairs(hsv, pairs)
                 count = np.sum(np.nonzero(mask))
-                if count > 150:
+                if count > 120:
                     if wire < color.value:
                         wire = color.value
                     else:
                         wire += color.value
+
             self.wires[i] = wire
         log.debug(f"leds: {self.leds}")
         log.debug(f"wires: {self.wires}")

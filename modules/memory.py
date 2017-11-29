@@ -117,6 +117,7 @@ class MemorySolver():
             self.populate_button_labels()
             disp = self.get_display_value()
             move = self.get_move_for_stage(stage, disp)
+            self.draw(disp, move)
             log.debug(f"pressing button {move+1} (labelled {self.labels[move]})")
             self.do_move(move, stage=stage)
         return True
@@ -157,13 +158,22 @@ class MemorySolver():
     def populate_button_labels(self):
         """identify all the buttons"""
         self.image = self.robot.grab_selected(0)
-
         #get a list of length, position pairs and sort them by length
         labels = sorted(self.get_label_lengths())
         for i, label in enumerate(labels):
             #this is the Nth button by length, so retrieve its label from the list of labels in length order
             self.labels[label[1]] = labels_by_length[i]
         log.debug(f"labels: {self.labels}")
+
+    def draw(self, disp, move):
+        canvas = np.full((120,120,3),130, dtype="uint8")
+        #draw display
+        cv2.rectangle(canvas, (40,10), (80,50), (20,20,20), 1)
+        draw_label(canvas, (60,30), f"{disp+1}",font_scale=1)
+        for x in range(4):
+            cv2.rectangle(canvas, (x*30, 70), ((x+1)*30, 90), (20, 20, 20), 1)
+            draw_label(canvas, (x*30+15,80), f"{self.labels[x]+1}")
+        self.robot.draw_module(canvas)
 
     def get_label_lengths(self):
         """get the arc lengths of contours on the 4 buttons (for identifying)"""

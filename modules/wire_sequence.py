@@ -97,13 +97,33 @@ class Solver():
             test = self.new(robot)
             wires = len(test.get_panel())
             log.debug(f"wire sequence retrest found {wires} wires")
-            return 0 < wires < 4, base
+            return 200 if 0 < wires < 4 else False, base
         return False, base
 
 class SequenceSolver():
     def __init__(self, robot:robot_arm.RobotArm):
         self.robot = robot
         self.wires = {"red": 0, "blue": 0, "black": 0}
+
+
+    def draw(self, panel):
+        canvas = np.full((100,100,3),130, dtype="uint8")
+        x1 = 10
+        x2 = 90
+        ys = [10,50,90]
+        for start in range(3):
+            cv2.rectangle(canvas, (x1-5,ys[start]-5), (x1+5,ys[start]+5), (40,40,40))
+            cv2.rectangle(canvas, (x2-5,ys[start]-5), (x2+5,ys[start]+5), (40,40,40))
+            if start in panel:
+                color, term = panel[start]
+                col = (0,0,255)
+                if color == "blue":
+                    col = (255,0,0)
+                if color == "black":
+                    col = (0,0,0)
+                y2 = ys[term.value//2]
+                cv2.line(canvas, (x1,ys[start]), (x2,y2), col, 3)
+        self.robot.draw_module(canvas)
 
     def solve_interactive(self):
         pass
@@ -166,6 +186,7 @@ class SequenceSolver():
         #image = cv2.imread("fail/img1.bmp")
         #display(image)
         panel = self.get_panel()
+        self.draw(panel)
         for start in sorted(panel.keys()):
             color, term = panel[start]
             cut = self.test_wire(color, term)

@@ -195,7 +195,7 @@ class PasswordSolver():
     def increment_letter(self, pos, after=0.5, incr = True):
         buttons = up_buttons if incr else down_buttons
         self.robot.moduleto(*buttons[pos])
-        self.robot.click(before=0.05, after=after)
+        self.robot.click(after=after)
         self.pointers[pos] = (self.pointers[pos] + (1 if incr else -1)) % 6
         self.draw()
     def seek_letter(self, pos, char):
@@ -221,6 +221,7 @@ class PasswordSolver():
                 #self.robot.panic("letters/")
                 if looking_at == char: # or looking_at == None:
                     return True
+                #dump_image(get_letter_region(self.image, pos),dir= "password", starts=f"{char}_{looking_at}_")
                 self.increment_letter(pos,after=0.3)
                 looking_at = self.get_letter_label(pos)
                 self.letters[pos].append(looking_at)
@@ -317,6 +318,9 @@ class PasswordSolver():
             self.update_image()
         return self.match_letter(get_letter_region(self.image, pos))
     def match_letter(self, image, centred = True):
+        #TODO: Make letter matching less awful
+        #letters can be stretched on the y axis
+        # try getting shape from contours?
         """get the label for the given image of a letter"""
         features = get_features(image)
         ret, result, neighbours, dist = self.knn.findNearest(features.reshape(1,30), k=1)

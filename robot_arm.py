@@ -72,17 +72,18 @@ class RobotArm:
         1 for solved, -1 for red (warning light) or 0 for unlit"""
         if image is None:
             image = self.grab_selected(allow_dark=True)
-        indicator = to_hsv(image[:23 , 130:])
+        region = image[:23 , 130:]
+        indicator = to_hsv(region)
         green = inRangePairs(indicator, [(58, 74), (222, 255), (204, 251)])
         if np.sum(green) > 2550:
-            log.debug("it is solved")
-            dump_image(indicator, starts="green", dir="indicator")
+            #log.debug("it is solved")
+            dump_image(region, starts="green", dir="indicator")
             return 1
         red = inRangePairs(indicator, [(167, 179), (175, 255), (208, 255)]) # red indicator#
         if np.sum(red) > 2550:
-            dump_image(indicator, starts="red", dir="indicator")
+            dump_image(region, starts="red", dir="indicator")
             return -1
-        dump_image(indicator, starts="none", dir="indicator")
+        dump_image(region, starts="none", dir="indicator")
         return 0
 
     def draw(self):
@@ -194,11 +195,13 @@ class RobotArm:
             im = im[:,:selected_right-selected_left]
         return im
 
-    def click(self, before=0., after=0., button=Button.left):
+    def click(self, before=0., after=0., button=Button.left, between = 0.):
         if self.robot.safe: return sleep(after)
-        mouse.press(button)
         if before:
             sleep(before)
+        mouse.press(button)
+        if between:
+            sleep(between)
         mouse.release(button)
         if after:
             sleep(after)
