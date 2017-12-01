@@ -70,7 +70,7 @@ class Solver():
         pass
     def new(self, robot:robot_arm.RobotArm):
         return SequenceSolver(robot)
-    def identify(self, robot):
+    def identify(self, robot:robot_arm.RobotArm):
 
         xoff = 22
         yoff = 32

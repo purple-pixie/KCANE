@@ -23,13 +23,16 @@ class Robot():
         self.selected = 0
         self.battery_count = 0
         self.gubbins = {}
-        self.serial_odd = -1
-        self.serial_vowel = 0
+        self.serial_odd = False
+        self.serial_vowel = False
         self.strikes = 0
     def peek(self):
-        self.examine_gubbins()
+        #self.examine_gubbins()
         self.analyse_bomb()
 
+    def has_indicator(self, label):
+        return False
+        #label == "CAR"
 
     def flip_bomb(self):
         self.arm.rotate(4)
@@ -48,41 +51,56 @@ class Robot():
         self.flip_bomb()
 
     def defuse_face(self):
-        for pos in range(6):
-            if self.modules[self.face][pos] != "empty":
-                self.selected = pos
-                self.arm.goto(pos, after = 0.5)
-                module = self.identify()
-                if module is None:
-                    print("Not sure what this is. Skipping")
-                    self.draw_module(module_images["unknown"], nonwhite=True)
-                    #dump_image(self.arm.grab_selected())
-                else:
-                    if module == "solved":
-                        print(f"Already solved, ignoring")
-                    else:
-                        print(f"Looks like {module}. Defusing")
-                        #TODO: derive solved from the indicator and don't rely on module
-                        #self.arm.indicator_state()
-                        solved = solvers[module].new(self.arm).solve()
-                        state = self.arm.indicator_state()
-                        if state == 0:
-                            #if state initially gray, try sleeping for a bit and testing again
-                            sleep(0.2)
-                            state = self.arm.indicator_state()
-                        if state == -1:
-                            log.warning(f"Struck out on {module}!")
-                            self.draw_module(module_images["failed"], nonwhite=True)
-                        if state == 0:
-                            log.info(f"Module {module} says solved but module is unfinished")
-                        if state == 1:
-                            log.info(f"Solved {module}")
-                            self.draw_module(module_images["solved"], nonwhite=True)
+        self.selected = -1
+        active = [pos for pos, mod in enumerate(self.modules[self.face]) if mod != "empty"]
+        for pos in active:
+            #TODO: Bring back the goto_from logic but make sure we aren't trying to select a Clock
+            #probably needs the clock module written first so it can identify clocks
+            #clock will need to handle a full screenshot and not just grab_selected because the clock will never be in focus
 
-                self.arm.rclick(after=0.45)
+          # if self.selected == -1:
+          #     self.arm.goto(pos)
+          # else:
+          #     self.arm.goto_from(pos, after = 0.5)
+            self.arm.goto(pos)
+            self.selected = pos
+
+            #dump_image(self.arm.grab(), dir="ident", starts="full")
+            module = self.identify()
+            if module is None:
+                print("Not sure what this is. Skipping")
+                self.draw_module(module_images["unknown"], nonwhite=True)
+                #dump_image(self.arm.grab_selected())
+            else:
+                if module == "solved":
+                    print(f"Already solved, ignoring")
+                else:
+                    print(f"Looks like {module}. Defusing")
+                    #TODO: derive solved from the indicator and don't rely on module
+                    #self.arm.indicator_state()
+                    solved = solvers[module].new(self.arm).solve()
+                    state = self.arm.indicator_state()
+                    if state == 0:
+                        #if state initially gray, try sleeping for a bit and testing again
+                        sleep(0.1)
+                        state = self.arm.indicator_state()
+                    if state == -1:
+                        log.warning(f"Struck out on {module}!")
+                        self.strikes += 1
+                        self.draw_module(module_images["failed"], nonwhite=True)
+                    if state == 0:
+                        log.info(f"Module {module} says solved but module is unfinished")
+                    if state == 1:
+                        log.info(f"Solved {module}")
+                        self.draw_module(module_images["solved"], nonwhite=True)
+            self.arm.rclick(after=0.35)
 
     def get_strikes(self):
         return self.strikes
+
+    def __getitem__(self, item, default=None):
+        return self.gubbins.get(item, default=default)
+
 
     def examine_gubbins(self):
         self.arm.wake_up()
@@ -94,7 +112,8 @@ class Robot():
         for dir, edge in self.arm.get_edges():
             warped = get_edge(edge, dir)
             if not warped is None:
-                #dump_image(warped, dir="edges")
+                dump_image(warped, dir="edges", starts=f"{dir}_")
+                display(warped, f"edge {dir}", wait_forever=False)
                 hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
                 if batteries < 3:
                     bats = count_batteries(warped, hsv)
@@ -112,7 +131,7 @@ class Robot():
                     serial = find_serial(warped, hsv)
                     if serial != "":
                         print(f"Found serial: {serial}")
-                        self.serial_vowel = len(set("AEIOU")&set(serial))
+                        self.serial_vowel = len(set("AEIOU")&set(serial)) > 0
                         try:
                             self.serial_odd = int(serial[-1])%2
                         except ValueError:
@@ -127,7 +146,7 @@ class Robot():
         print(f"Gubbins results: {self.gubbins}")
 
     def serial_digit_error(self, made_error = False):
-        self.serial_digit = not self.serial_digit
+        self.serial_odd = not self.serial_odd
         self.strikes += made_error
 
     def serial_vowel_error(self):
@@ -158,7 +177,7 @@ class Robot():
         self.drawer.draw_module(image, self.selected, nonwhite=nonwhite)
 
     def analyse_face(self):
-        sleep(0.1)
+        sleep(0.3)
         for i, label in enumerate(self.arm.scan_modules()):
             self.modules[self.face][i] = label
             self.draw()
@@ -191,7 +210,6 @@ class Robot():
             #that's solved
             #TODO: split ID and solved-flag
             return "solved"
-       #probably have enough dumps of centred modules now
        #dump_image(im, "fail", starts="identify")
         selected = fake_arm.grab_selected()
         disp=None
@@ -200,12 +218,13 @@ class Robot():
             if do_show:
                 # todo: draw these more sensibly
                 # lump them all together?
-                scaled = cv2.resize(img, (100,100))
-                disp = hstack_pad(disp, scaled)#, f"{module}", wait_forever=False)
+                if img is not None:
+                    scaled = cv2.resize(img, (100,100))
+                    disp = hstack_pad(disp, scaled)#, f"{module}", wait_forever=False)
             if acc:
                 log.info(f"{module} identified - confidence: {acc}")
                 dump = np.hstack((selected, img))
-                if not self.safe: dump_image(dump, dir="ident", starts=module)
+                #if not self.safe: dump_image(dump, dir="ident", starts=module)
                 yield (acc, module)
         if do_show:
             display(disp)
@@ -231,6 +250,8 @@ def main():
     try:
         # print(1/0)
         r.peek()
+        cv2.waitKey(0)
+        return
         r.defuse_bomb()
     except:
         #stops random crashes leaving right click clicked
@@ -248,18 +269,44 @@ from bomb_examiner import *
 def test():
     #s = screen.Screen(image_path="img2.bmp")
     #if 1:
-    for im in images_in("dump/ident", starts="complex_wires7"):
+    for im in images_in("dump/screens/", starts="unf"):
         #fake = screen.Screen(image_path="dump/watched/img49.bmp")
         #fake = screen.Screen(image_path="dump/test/img38.bmp")
         fake = screen.Screen(image=im)
         r = Robot(fake, safe=True)
-       # r = Robot(screen.Screen(2))
+        arm = r.arm
+        list(arm.scan_modules())
+        #img = arm.grab_module_unfocused(3)
+        #import clock
+        #clock.isClock(img)
+        #cv2.waitKey(0)
+        #return
+        #im = r.arm.grab() #_selected()
+        #r.arm.goto(1, after=0)
+        #for i in range(6):
+        #img = np.hstack(r.arm.grab_other_module(i) for i in range(6))
+        #display(img, "module {}") #, wait_forever=False)
+            #s1=screen.Screen(image=img)
+            #display(img)
+            #r1 = Robot(s1)
+            #for mod in solvers:
+            #    print(f"{mod} | ")
+            #    if solvers[mod].identify(r.arm)[0]: print(f"{mod} | ")
+            #    pass
+      # display(im)
+        # r = Robot(screen.Screen(2))
         #r.arm.wake_up()
         #time.sleep(0.2)
         #r.arm.goto(5)
-        #p=solvers["morse"].new(r.arm)
-        #p.solve()
-        r.identify(True)
+     #  p=solvers["button"]#
+     #  i, im = p.identify(r.arm)
+     #  if i > 50:
+     #      print(f"{i} | {p.new(r.arm)}")
+     #      display(im)
+     #  p.new(r.arm).solve()
+        #p.test()
+        #p.train(r.arm)
+        #r.identify(True)
        # cv2.waitKey(0)
        # cv2.destroyAllWindows()
        # return
@@ -269,5 +316,5 @@ def test():
 
 
 if __name__ == "__main__":
-    #test()
-    main()
+    test()
+    #main()

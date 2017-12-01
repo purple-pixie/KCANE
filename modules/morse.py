@@ -34,7 +34,20 @@ def from_morse(dots):
 class Morse():
     def __init__(self, robot:RobotArm):
         self.robot = robot
+        self.canvas = np.full((100,100,3),120,"uint8")
+    #TODO: draw morse
 
+    def draw_dots(self,dots):
+        cv2.rectangle(self.canvas, (0,60), (99,80),(120,120,120), -1)
+        draw_label(self.canvas, (50,70), f"{dots}: {morse_english_dict.get(dots, '?')}")
+        self.robot.draw_module(self.canvas)
+
+    def draw_state(self, state):
+        color = (20,230,230) if state else (120,120,120)
+        c2 = (20,180,180) if state else (120,120,120)
+        cv2.circle(self.canvas, (50,20), 30, c2, -1)
+        cv2.rectangle(self.canvas, (20,10), (80,30), color)
+        self.robot.draw_module(self.canvas)
     def solve(self):
         solution = self.read_word(partial=True)
         if solution is None:
@@ -92,6 +105,7 @@ class Morse():
             state, t_diff = self.read_statechange(timeout=1)
             if state:
                 dots += "." if t_diff < 0.5 else "-"
+                self.draw_dots(dots)
             else:
                 if t_diff > 0.45:
                     return dots
@@ -100,11 +114,13 @@ class Morse():
         """Watches the light and returns when it changes state or hits the timeout
         returns previous state, delta-time"""
         if previous_state is None: previous_state = self.get_state()
+        self.draw_state(previous_state)
         starttime = time.time()
         while "Reading state":
             state  = self.get_state()
             t_diff = time.time()-starttime
             if not (state == previous_state):
+                self.draw_state(state)
                 return previous_state, t_diff
             if 0 < timeout <= t_diff :
                     return 0, t_diff
@@ -122,7 +138,7 @@ class Solver():
     def new(self, robot:RobotArm):
         return Morse(robot)
 
-    def identify(self, robot):
+    def identify(self, robot:RobotArm):
         im = robot.grab_selected()
         hsv = to_hsv(im)
         mask = inRangePairs(hsv, [(5, 26), (149, 215), (0, 255)])

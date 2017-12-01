@@ -97,7 +97,7 @@ def get_features(image, flat = True):
     for y in range(6):
         for x in range(5):
             xx, yy = pixel_centre(x, y)
-            if a[yy][xx] > 120:
+            if a[yy, xx] > 120:
                 im[y, x] = 255
     if flat:
         return flat_vector(im)
@@ -138,7 +138,7 @@ class Solver():
     def new(self, robot:robot_arm.RobotArm):
         return PasswordSolver(robot, self.knn, self.passwords)
 
-    def identify(self, robot):
+    def identify(self, robot:robot_arm.RobotArm):
         #this is why it wont do passwords
         #return False
         test = PasswordSolver(robot, self.knn, self.passwords)
@@ -227,8 +227,8 @@ class PasswordSolver():
                 self.letters[pos].append(looking_at)
                 self.draw()
                 #print(f"now: {looking_at}")
-            print(f"Failed to find {char}!")
-            print(self.letters)
+            log.info(f"Failed to find {char}!")
+            log.info(self.letters)
             return False
         return True
 

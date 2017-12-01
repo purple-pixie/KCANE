@@ -13,6 +13,12 @@ def rect_corners(cnt):
     x, y, w, h = cv2.boundingRect(cnt)
     return (x, y), (x + w, y + h)
 
+def is_empty(image):
+    hsv = to_hsv(image)
+    mask = inRangePairs(hsv, [(8, 14), (99, 255), (94, 255)])
+    return np.sum(mask) > 1000000
+
+
 def find_highlight(image):
     """is there a highlighted module in image"""
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
@@ -138,7 +144,7 @@ def get_serial_letters(image):
     boxes = [(cv2.boundingRect(i), i) for i in cnts]
     by_area = sorted(boxes, key = lambda x: x[0][2] * x[0][3], reverse=True)[:6]
     by_x = sorted(by_area, key=lambda x: x[0][0])
-    print(by_x[0][0])
+    #print(by_x[0][0])
     #regions = sorted(cnts, key=cv2.contourArea, reverse=True)[:6]
     #then sort by x-value to get them in order
     #regions = sorted(regions, key = lambda x: cv2.boundingRect(x)[0])
@@ -177,7 +183,8 @@ def find_serial(bgr, hsv):
             #get_serial_letters(mask)
             text = tess(mask, config="--psm 8 letters", remove=False)
             digits = tess(mask, config="--psm 8 digits", remove=False)
-            dump_image(mask, dir="serial")
+            dump_image(mask, dir="serial", starts="mask")
+            dump_image(bgr[y:y+h,x:x+w], dir="serial", starts="base")
             #print(f"Tess: {text} | {digits}")
 
             #TODO: Do this properly and be less of a hack

@@ -5,6 +5,7 @@ from enum import Enum
 import cv2
 import threading
 import bomb_examiner
+import clock
 from util import *
 mouse = Controller()
 
@@ -27,8 +28,6 @@ def on_press(key):
     if key == Key.space:
         return False
 
-    #quit on any key
-    return False
     return True
 
 def on_release(key):
@@ -53,17 +52,19 @@ class RobotArm:
     def __init__(self, screen, wake_up = False, robot = None):
         self.screen = screen
         self.robot = robot
+        self.selected = -1
         #listen for the user pressing space
         #if they ever do, quit out next time we're asked to sleep
         listen = Listener(on_press=on_press, on_release=on_release)
         listen.start()
     def wake_up(self):
         self.mouseto(100, 100)
-        #print("Unselecting module / dropping bomb")
+        log.debug("Unselecting module / dropping bomb")
         self.rclick(after = 0.25)
-        #print("Dropping bomb")
+        log.debug("Ensuring bomb is dropped")
         self.rclick(after = 0.25)
         self.pick_up()
+
 
     def indicator_state(self, image = None):
         """the solved state of the indicator on the currently selected bomb
@@ -77,13 +78,13 @@ class RobotArm:
         green = inRangePairs(indicator, [(58, 74), (222, 255), (204, 251)])
         if np.sum(green) > 2550:
             #log.debug("it is solved")
-            dump_image(region, starts="green", dir="indicator")
+           # dump_image(region, starts="green", dir="indicator")
             return 1
         red = inRangePairs(indicator, [(167, 179), (175, 255), (208, 255)]) # red indicator#
         if np.sum(red) > 2550:
-            dump_image(region, starts="red", dir="indicator")
+            #dump_image(region, starts="red", dir="indicator")
             return -1
-        dump_image(region, starts="none", dir="indicator")
+       # dump_image(region, starts="none", dir="indicator")
         return 0
 
     def draw(self):
@@ -94,13 +95,17 @@ class RobotArm:
 
     def scan_modules(self, dump = False):
         for mod in range(6):
-            self.mouse_to_module(mod)
-            sleep(0.1, True)
-            s = self.grab()
-            if dump: dump_image(s, starts=f"mod{mod}_")
+            image = self.grab_module_unfocused(mod)
+            #self.mouse_to_module(mod)
+            #sleep(0.1, True)
+            #s = self.grab()
+            if dump: dump_image(image, starts=f"mod{mod}_")
             #find the clock?
             #can probably just let simple buttons deal with it themselves
-            yield "unidentified" if bomb_examiner.find_highlight(s) else "empty"
+            if bomb_examiner.is_empty(image):
+                yield "empty"
+            else:
+                yield "clock" if clock.isClock(image) else "unidentified"
 
     def get_edges(self):
         for i in range(4):
@@ -126,7 +131,7 @@ class RobotArm:
             if dir == 0: x = x - 146
             elif dir == 1: y = y - 146
             elif dir == 2: x = x + 146
-            elif dir == 3: y = y + 146
+            elif dir == 3: y = y + 148
             elif dir == 4: x = x - 292
             elif dir == 5: x = x + 292
             else:
@@ -167,9 +172,24 @@ class RobotArm:
         #log#print(f"mouse now at {mouse.position}")
     def mouse_to_module(self, mod):
         self.mouseto(*modules[mod])
+
+
+    def goto_from(self, desired, after=0.3):
+        """goto module desired, starting from self.selected"""
+        current = self.selected
+        c_x, c_y = current%3,current//3
+        d_x, d_y = desired%3, desired//3
+        x = 400 + (d_x-c_x) * 200
+        y = 300 + (d_y-c_y) * 200
+        x = min(max(x, 75), 725)
+        self.mouseto(x, y)
+        self.click(0, after)
+        self.selected = desired
+
     def goto(self, mod, after = 1):
         self.mouse_to_module(mod)
         self.click(0, after)
+        self.selected = mod
         #move to the middle of the focus tile
         #self.mouse_to_centre()
     def moduleto(self, x, y):
@@ -182,6 +202,36 @@ class RobotArm:
             if len(im.shape) > 2:
                 return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         return im
+
+
+
+    def grab_other_module(self, desired):
+        """grab module at pos, assuming we are looking at current and want desired"""
+        current = self.selected
+        c_x, c_y = current%3,current//3
+        d_x, d_y = desired%3, desired//3
+
+        pad_x = selected_right - selected_left + 25
+        pad_y = selected_bot - selected_top + 20
+
+        x1 = selected_left + pad_x * (d_x-c_x)
+        x2 = selected_right+ pad_x * (d_x-c_x)
+        y1 = selected_top + pad_y * (d_y - c_y)
+        y2 = selected_bot + pad_y * (d_y - c_y)
+
+        return self.grab()[y1:y2, x1:x2]
+
+    def grab_module_unfocused(self, pos):
+        """grab module at position pos (0-5) assuming no module currently selected"""
+        x,y = pos%3, pos//3
+        y1 = 160
+        y2 = 298
+        x1 = 180
+        x2 = 316
+        h = y2-y1
+        w = x2-x1
+        return self.grab()[y1 + y * h + y * 12:y2 + y * h + y * 12, x1 + x*w + x*25 : x2+x*w+x*25]
+
     def grab_selected(self, colour = True, allow_dark = False, allow_red = False):
         """grab a screenshot of the active module"""
         im = self.grab(colour, allow_dark, allow_red)
@@ -195,17 +245,24 @@ class RobotArm:
             im = im[:,:selected_right-selected_left]
         return im
 
-    def click(self, before=0., after=0., button=Button.left, between = 0.):
+    def click(self, before=0., after=0., button=Button.left, between = 0., dir = None):
         if self.robot.safe: return sleep(after)
+        if not dir is None:
+            dump_image(self.grab_selected(),dir=dir,starts="pre_sleep")
         if before:
             sleep(before)
+        if not dir is None:
+            dump_image(self.grab_selected(),dir=dir,starts="pre_click")
         mouse.press(button)
         if between:
             sleep(between)
         mouse.release(button)
         if after:
             sleep(after)
+        if not dir is None:
+            dump_image(self.grab_selected(),dir=dir,starts="post_click")
     def rclick(self, **kwargs):
+        self.selected = -1
         self.click(button=Button.right, **kwargs)
 
     def draw_module(self, image):

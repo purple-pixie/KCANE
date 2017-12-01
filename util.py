@@ -30,7 +30,7 @@ class PrintSnooper:
         self.stdout.write("printed by %s: " % self.caller())
         self.stdout.write(s[:100])
         self.stdout.write("\n")
-
+#sys.stdout = PrintSnooper(sys.stdout)
 def images_in(dir = "", flags=1, ext = ".bmp", return_names = False, return_full_names = False, starts = ""):
     starts = os.path.join(dir, starts)
     for name in glob.glob(f"{starts}*{ext}"):
@@ -149,8 +149,16 @@ def contour(image, is_color=False, blur_kernel=None, draw = False,
         #for c in contours:
         #cv2.im
     if return_hierarchy:
-        return contours, hierarchy
+        if hierarchy is not None:
+            return contours, hierarchy[0]
+        else:
+            return contours, []
     return contours
+
+def draw_rect(image, x, y, w, h, color=(0,0,0), thickness=1, draw_centred = False):
+    if draw_centred:
+        x, y = x-w//2, y-h//2
+    cv2.rectangle(image, (x,y), (x+w, y+h), color, thickness)
 
 def get_dump_name(dir="", ext="bmp", starts=""):
     if "." in ext:
@@ -204,3 +212,31 @@ def to_bgr(hsv=None, gray = None):
         return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
 
+class Contour():
+    def __init__(self, cnt):
+        self.points = cnt
+        self.box = None
+        self.length = None
+    def draw(self, image, detail_color = (0,0,255), rect_color = None, detail_width = 1):
+        if rect_color is not None:
+            cv2.rectangle(image, (self.x-1, self.y-1), (self.x+self.w, self.y+self.h), rect_color, 1)
+        if detail_color is not None:
+            cv2.drawContours(image, [self.points], -1, detail_color, detail_width)
+
+    def __getattr__(self, item):
+        if item in "xywh":
+            if self.box is None:
+                self.box = cv2.boundingRect(self.points)
+            return self.box["xywh".index(item)]
+        if item == "centre":
+            return [self.x + self.w//2, self.y + self.h//2]
+        if item == "length":
+            if self.length is None:
+                self.length=cv2.arcLength(self.points, False)
+        return getattr(self, item)
+
+    def __len__(self):
+        return len(self.points)
+
+    def __repr__(self):
+        return f"Contour at {self.x, self.y}, size: {self.w,self.h}"

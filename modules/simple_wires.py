@@ -46,10 +46,10 @@ def find_wires(image):
     if DRAW_DEBUG: display(canvas)
 
 class Solver():
-    def new(self, robot):
+    def new(self, robot:robot_arm.RobotArm):
         return SimpleWires(robot)
 
-    def identify(self, robot):
+    def identify(self, robot:robot_arm.RobotArm):
         ##TODO: make sure this isn't being overly restrictive
         #seemed to miss a few
         image = robot.grab_selected()
@@ -72,7 +72,7 @@ def last(li, colour):
     return len(li) - 1 - li[::-1].index(colour)
 
 class SimpleWires():
-    def __init__(self, robot):
+    def __init__(self, robot:robot_arm.RobotArm):
         self.robot = robot
         self.image = self.robot.grab_selected()
 

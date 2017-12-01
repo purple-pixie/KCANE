@@ -122,7 +122,7 @@ class ComplexWires():
         move_dict = {a:[] for a in "BCDPS"}
         for v, k in moves:
             move_dict[k] = move_dict.get(k, []) + [v]
-        print(move_dict)
+        log.debug(f"{move_dict}")
         log.debug(f"skipping D's: {len(move_dict['D'])} skipped")
         #cut the Cs
         self.cut_wires(move_dict["C"])
@@ -132,7 +132,7 @@ class ComplexWires():
             self.cut_wires(move_dict["B"])
         if self.robot.robot.gubbins["parallel"]:
             log.debug(f"Parallel port found, cutting {len(move_dict['P'])} P's")
-            self.cut_wires(move_dict["B"])
+            self.cut_wires(move_dict["P"])
         #now the interesting one - OCR is fiddly but if we assume we got everything else right
         #then we can actually infer serial state from the module state because it tells us if it is solved or not
         serials = move_dict["S"]
@@ -141,6 +141,7 @@ class ComplexWires():
             if self.robot.indicator_state() == 1:
                 if self.robot.robot.serial_is_odd():
                     log.debug(f"Serial is definitely odd, 'S' wires uncut and module solved")
+                    return True
                 else:
                     self.robot.robot.serial_digit_error(False)
                     log.info(f"Module says solved but 'S' wires remain, serial must be wrong")
@@ -158,7 +159,7 @@ class ComplexWires():
         for wire in indexes:
             log.info(f"Cutting wire {wire+1}")
             self.robot.moduleto(23+16*wire, 29)
-            self.robot.click(before=0.1, after=0.05)
+            self.robot.click(before=0.1,after=0.1) #before=0.2, after=0.2, dir = "complex")
         pass
 
     def get_cuts(self):
@@ -213,7 +214,7 @@ class ComplexWires():
             region = (slice(y, y + 10), slice(x - 8, x + 8))
             hsv = image[region]
             sanity_mask = hsv[..., 0] < 5
-            hsv[..., 0][sanity_mask] = 179
+            hsv[..., 0][sanity_mask] = 178
             wire = -1
             led = image[y - 10, x,2]
             self.leds[i] = WIRE.led.value if  led > 50 else 0

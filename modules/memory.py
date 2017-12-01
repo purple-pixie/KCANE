@@ -51,7 +51,7 @@ class Solver():
         pass
     def new(self, robot:robot_arm.RobotArm):
         return MemorySolver(robot)
-    def identify(self, robot):
+    def identify(self, robot:robot_arm.RobotArm):
         im = robot.grab_selected().copy()
         hsv = to_hsv(im)
         mask = inRangePairs(hsv, [(17, 24), (40, 125), (134, 255)])

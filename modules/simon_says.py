@@ -1,10 +1,9 @@
 from util import *
 import logging
+import robot_arm
 log = logging.getLogger(__name__)
 import time
 from enum import Enum
-
-from robot_arm import sleep, RobotArm
 #v-min 220 catches lit square
 
 # sat 150+ - only the 4 squares
@@ -31,7 +30,7 @@ button_regions = [(35,60), (70,30), (70, 90), (105,60) ]
 button_hues = [179, 118,  54, 25]
 
 class SimonSays():
-    def __init__(self, robot):
+    def __init__(self, robot:robot_arm.RobotArm):
         self.robot:RobotArm = robot
         return
 
@@ -126,7 +125,7 @@ class SimonSays():
                 button = self.get_lit_button(1)
             else:
                 button = self.get_lit_button()
-            log.info(f"solving stage {steps}-{i}")
+            log.info(f"solving stage {steps}-{i}: {button}")
             if button is None:
                 #will get here if we lose track in the middle of a loop too.
                 #solver should try once more on the same stage
@@ -139,7 +138,7 @@ class SimonSays():
         for i, color in enumerate(sequence):
             self.robot.moduleto(*button_regions[color.value])
             dump_image(self.robot.grab_selected(),dir="interesting",starts="pre_click")
-            self.robot.click(before=0.5) #, after=0.1)
+            self.robot.click(before=0.1 if i else 0.5) #, after=0.1)
             dump_image(self.robot.grab_selected(), dir="interesting", starts="post_click")
         return True
     def solve(self, retry = True):
@@ -158,7 +157,7 @@ class SimonSays():
                 if not self.solve_stage(stage):
                     break
             log.debug(f"solve pre-stage nap")
-            sleep(0.2)
+            robot_arm.sleep(0.2)
             indicator = to_hsv(self.robot.grab_selected()[:23 , 130:])
             green = inRangePairs(indicator, [(58, 74), (222, 255), (204, 251)])
             red = inRangePairs(indicator, [(167, 179), (175, 255), (208, 255)]) # red indicator#
@@ -169,13 +168,13 @@ class SimonSays():
                 if retry:
                     log.info("I screwed up. Assuming the serial was wrong and restarting.")
                     self.robot.robot.serial_vowel_error()
-                    sleep(2)
+                    robot_arm.sleep(2)
                     return self.solve(retry=False)
                 else:
                     log.info("I really screwed up, aborting")
                     return False
             log.debug(f"solve post-stage sleep")
-            sleep(.5)
+            robot_arm.sleep(.5)
         else:
             return True
         return False
@@ -183,10 +182,10 @@ class SimonSays():
 class Solver():
     def __init__(self):
         pass
-    def new(self, robot):
+    def new(self, robot:robot_arm.RobotArm):
         x = SimonSays(robot)
         return x
-    def identify(self, robot):
+    def identify(self, robot:robot_arm.RobotArm):
         #TODO - Simon seems to be missing idents when a button is lit.
         #check for that explicitly or use a heuristic that allows for it
         image = robot.grab_selected()
@@ -195,7 +194,7 @@ class Solver():
         h, s, v = (hsv[...,i] for i in range(3))
         #sanity adjust hue so that reds are all together:
         sanity_mask = h < 5
-        h[sanity_mask] = 179
+        h[sanity_mask] = 178
         for c, ((x, y), hue) in enumerate(zip(button_regions, button_hues)):
             #x, y = button_regions[color]
             #hue = button_hues[c]
