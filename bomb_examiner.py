@@ -183,8 +183,8 @@ def find_serial(bgr, hsv):
             #get_serial_letters(mask)
             text = tess(mask, config="--psm 8 letters", remove=False)
             digits = tess(mask, config="--psm 8 digits", remove=False)
-            dump_image(mask, dir="serial", starts="mask")
-            dump_image(bgr[y:y+h,x:x+w], dir="serial", starts="base")
+           # dump_image(mask, dir="serial", starts="mask")
+           # dump_image(bgr[y:y+h,x:x+w], dir="serial", starts="base")
             #print(f"Tess: {text} | {digits}")
 
             #TODO: Do this properly and be less of a hack

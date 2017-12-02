@@ -154,7 +154,12 @@ class SequenceSolver():
 
     def solve(self):
         for panel in range(4):
-            for wire in self.get_cuts():
+            try:
+                cuts = self.get_cuts()
+            except ValueError:
+                #failed to get cuts
+                return False
+            for wire in cuts:
                 log.info(f"cutting {wire+1}")
                 self.cut_wire(wire)
             log.info(f"next panel")
@@ -186,6 +191,8 @@ class SequenceSolver():
         #image = cv2.imread("fail/img1.bmp")
         #display(image)
         panel = self.get_panel()
+        if panel == {}:
+            raise ValueError("failed to ID panel")
         self.draw(panel)
         for start in sorted(panel.keys()):
             color, term = panel[start]

@@ -137,21 +137,12 @@ class SimonSays():
         log.debug(f"Sequence: {sequence}")
         for i, color in enumerate(sequence):
             self.robot.moduleto(*button_regions[color.value])
-            dump_image(self.robot.grab_selected(),dir="interesting",starts="pre_click")
             self.robot.click(before=0.1 if i else 0.5) #, after=0.1)
-            dump_image(self.robot.grab_selected(), dir="interesting", starts="post_click")
         return True
     def solve(self, retry = True):
         self.canvas = np.full((170, 170, 3), 120, dtype="uint8")
-        #TODO: fix the timing with simon
-        #also need to remember that the solution should match the last stage plus a move
-        #something goes wrong on later runs, looks like it is missing an input maybe
-        #possibly dropping a click
-        #needs a proper look at
-        #or a re-do to have it sanity check solution vs previous stages
-        #<>log the time of each get_lit_button check
-        #see if they stay lit for over-long (when a colour repeats)
-        #or if diff since last light up is really big (cycle repeats. must have missed something)
+        #TODO: remember that the solution should match the last stage plus a move
+        #or ditch the whole stage thing? could pick up half solved runs
         for stage in range(6):
             if self.solve_stage(stage) is None:
                 if not self.solve_stage(stage):
@@ -189,7 +180,7 @@ class Solver():
         #TODO - Simon seems to be missing idents when a button is lit.
         #check for that explicitly or use a heuristic that allows for it
         image = robot.grab_selected()
-        dump_image(image)
+        #dump_image(image)
         hsv  = to_hsv(image)
         h, s, v = (hsv[...,i] for i in range(3))
         #sanity adjust hue so that reds are all together:

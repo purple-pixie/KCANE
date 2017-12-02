@@ -28,91 +28,66 @@ def get_segments_by_state(image, lit = True):
         #else: print(cnt)
 
 #def a*()
+def sort_by_y(flag_contour):
+    flag, contour = flag_contour
+    return contour.centre[1]
+
+def partial_digit(segment, start, stop):
+    return [flag for flag, cnt in sorted(segment[start:stop], key=sort_by_y)]
+
 def get_digit(segment):
-    """get digit from 7 contours"""
+    """get digit from 7 lit flag, contour pairs"""
+    #TODO: do this
+    lit_flags = partial_digit(segment, 0, 2) + partial_digit(segment, 2, 5) + partial_digit(segment, 5,7)
+    if lit_flags in digit_masks:
+        return digit_masks.index(lit_flags)
+    return 8
+
+digit_masks = [
+    [1,1,1,0,1,1,1],
+    [0,0,0,0,0,1,1],
+    [0,1,1,1,1,1,0],
+    [0,0,1,1,1,1,1],
+    [1,0,0,1,0,1,1],
+    [1,0,1,1,1,0,1],
+    [1,1,1,1,1,0,1],
+    [0,0,1,0,0,1,1],
+    [1,1,1,1,1,1,1],
+    [1,0,1,1,1,1,1]
+]
 
 def isClock(image):
     # for i, cnt in enumerate(contour(gray)):
     #     x1, y1 = cnt[0][0] * 4
     #     draw_label(canvas, (x1, y1 - 40), f"{i}", color=(0, 0, 0))
     # actual isClock:
-    # segments = list(get_segments(image)
- #   return len(segments) == 28
+    display(image, "clock_", wait_forever=False)
+    time.sleep(0.5)
+    dump_image(image, dir="clock", starts=f"length {len(list(get_segments(image)))}_")
+    return len(list(get_segments(image))) == 28
 
-#def read_clock(image):
+def read_clock(image):
+    #get all 28 segments (7 per digit) and sort them by x-coord
     segments = sorted(get_segments(image), key=lambda x: x[1].centre)
     segments = np.array(segments, dtype=object)
     try:
+        #split them up into 4 discrete digits
         segments = segments.reshape((4,7,2))
     except ValueError:
         #can't reshape to 4,7,2 means it wasn't 28,2 so we haven't found a good LCD
         return ""
+    #drawing fluff
     canvas = np.full(image.shape, 120, "uint8")
-
-    for state, cnt in segments[1]:
-        if state:
-            cnt.draw(canvas, detail_color=(0,0,255), detail_width=-1)
-        else:
-            cnt.draw(canvas, detail_color=(0,0,0))
-    dump = np.hstack((canvas, image))
-    display(dump)
-    for d in range(4):
-        pass
-    #centres = np.array([c.centre for d, c in cnts])
-
-    #dump_image(dump, dir="clock/fail")
-
-if __name__ == "__main__":
-    ims = images_in("", starts="", return_names=True)
-    for name, im in ims:
-        print(name)
-        #im = im[400:,400:]
-        hsv = to_hsv(im)
-        h = hsv[..., 0]
-        h[h < 5] = 178
-        mask = inRangePairs(hsv, [(121, 179), (21, 255), (0, 255)]) > 0
-        im[~mask] = 0
-        gray = to_gray(im)
-       # display(gray, "gray", wait_forever=False)
-      #  gray = blur(gray, (5, 5))
-      #  display(gray, "blur", wait_forever=False)
-        gray = otsu(gray)
-      #  display(gray, "otsu", wait_forever=False)
-        gray = cv2.erode(gray, (5, 5), iterations=5)
-     #   display(gray, "erode") #, wait_forever=False)
-        canvas = np.full(im.shape, 120, "uint8")
-        for i, cnt in enumerate(contour(gray)):
-            op = cv2.arcLength(cnt, False)
-            op = cv2.contourArea(cnt)
-            col = (0,255,0)#random_color()
-            if op < 40:
-                col = (255,255,0)
-            if op > 120:
-                col = (0,0,255)
-            cv2.drawContours(canvas, [cnt], -1, col, 1)
-            x1, y1 = cnt[0][0]
-            draw_label(canvas, (x1, y1 - 10), f"{i}", color=(0,0,0), font_scale=0.3)
-            op = cv2.arcLength(cnt, False)
-            cl = cv2.arcLength(cnt, True)
-            print(f"contour {i:2} - len {op} | diff {op-cl} | area {cv2.contourArea(cnt)}")
-        canvas = cv2.resize(canvas, None, fx=2,fy=2,interpolation=cv2.INTER_NEAREST)
-       # for i, cnt in enumerate(contour(gray)):
-       #     x1, y1 = cnt[0][0] * 4
-       #     draw_label(canvas, (x1, y1 - 40), f"{i}", color=(0, 0, 0))
-#
-        display(canvas)
-
-        #contour  4 - len 27.899494767189026 | diff -8.0 | area 58.5
-      # '' contour  5 - len 28.313708186149597 | diff -7.0 | area 56.0
-      # '' contour  6 - len 32.3137081861496 | diff -3.0 | area 52.0
-        #contour 15 - len 19.727921843528748 | diff -1.0 | area 24.5 - colon
-        #contour 39 - len 18.899494767189026 | diff -1.0 | area 22.5 - colon
-
-
-#[(19, 33), (192, 255), (149, 255)] - yellow button
-#[(0, 33), (0, 255), (137, 255)] - white button !!also finds yellow, do after
-#[(110, 120), (160, 255), (97, 255)] - blue button
-
-#[(174, 179), (73, 255), (163, 255)] - red button
-
-    
+    for digit in segments:
+        for state, cnt in digit:
+            if state:
+                cnt.draw(canvas, detail_color=(0,0,255), detail_width=-1)
+            else:
+                cnt.draw(canvas, detail_color=(0,0,0))
+        dump = np.hstack((canvas, image))
+        #print(f"digit is: {get_digit(digit)}")
+        #display(dump)
+    output =f"{get_digit(segments[0])}{get_digit(segments[1])}:{get_digit(segments[2])}{get_digit(segments[3])}"
+    print(output)
+    display(image)
+    return output

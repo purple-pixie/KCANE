@@ -60,7 +60,7 @@ class RobotArm:
     def wake_up(self):
         self.mouseto(100, 100)
         log.debug("Unselecting module / dropping bomb")
-        self.rclick(after = 0.25)
+        self.rclick(after = 0.1)
         log.debug("Ensuring bomb is dropped")
         self.rclick(after = 0.25)
         self.pick_up()
@@ -148,7 +148,7 @@ class RobotArm:
         sleep(0.2)
         if dir > 3:
             mouse.release(Button.right)
-            sleep(0.2)
+            sleep(1)
 
     def unrotate(self):
         if self.robot.safe:return

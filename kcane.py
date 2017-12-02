@@ -1,4 +1,3 @@
-from enum import Enum
 import numpy as np
 import screen
 from robot_arm import RobotArm, sleep
@@ -6,6 +5,7 @@ from util import *
 from modules import solvers
 from bomb_drawer import BombDrawer
 import logging
+import clock
 logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG) #, format='%(asctime)s.%(msecs)03d %(message)s')
 log = logging.getLogger(__name__)
 log.info("started")
@@ -26,8 +26,9 @@ class Robot():
         self.serial_odd = False
         self.serial_vowel = False
         self.strikes = 0
+
     def peek(self):
-        #self.examine_gubbins()
+        self.examine_gubbins()
         self.analyse_bomb()
 
     def has_indicator(self, label):
@@ -39,36 +40,48 @@ class Robot():
         # we're now facing the other side
         self.face = 1-self.face
         #make sure we caught up
-        #sleep(0.25)
+        #rotate does this
+        #sleep(1)
+
     def defuse_bomb(self):
         self.defuse_face()
         ##test for already winning?
-        ##probably don't need to, trying to flip will take <1 second and it should find 0 modules after
-        ## almost certianly don't need to. We examine front side then back, so we solve back first.
-        ## front will never(?) not have modules on it
         self.flip_bomb()
         self.defuse_face()
         self.flip_bomb()
 
     def defuse_face(self):
         self.selected = -1
-        active = [pos for pos, mod in enumerate(self.modules[self.face]) if mod != "empty"]
+        active = [pos for pos, mod in enumerate(self.modules[self.face]) if mod not in ("empty", "clock")]
         for pos in active:
-            #TODO: Bring back the goto_from logic but make sure we aren't trying to select a Clock
-            #probably needs the clock module written first so it can identify clocks
-            #clock will need to handle a full screenshot and not just grab_selected because the clock will never be in focus
-
-          # if self.selected == -1:
-          #     self.arm.goto(pos)
-          # else:
-          #     self.arm.goto_from(pos, after = 0.5)
-            self.arm.goto(pos)
+            if self.selected == -1:
+               self.arm.goto(pos)
+            else:
+               self.arm.goto_from(pos, after = 0.5)
             self.selected = pos
+
+            #CLOCK STUFF DEBUG#
+            clock_pos = self.get_clock_pos()
+            if clock_pos != -1:
+                c_x = clock_pos % 3
+                x = self.selected % 3
+                try:
+                    im = self.arm.grab_other_module(clock_pos)
+                    print(clock.read_clock(im))
+                    display(im, "clock", wait_forever=False)
+                except cv2.error:
+                    print(f"failed to read clock {c_x} from {x}")
+
+            #ENDCLOCK
 
             #dump_image(self.arm.grab(), dir="ident", starts="full")
             module = self.identify()
             if module is None:
-                print("Not sure what this is. Skipping")
+                print("Not sure what this is. retrying ")
+                sleep(0.2)
+                module = self.identify()
+            if module is None:
+                print("Still not sure what this is. Skipping")
                 self.draw_module(module_images["unknown"], nonwhite=True)
                 #dump_image(self.arm.grab_selected())
             else:
@@ -76,8 +89,6 @@ class Robot():
                     print(f"Already solved, ignoring")
                 else:
                     print(f"Looks like {module}. Defusing")
-                    #TODO: derive solved from the indicator and don't rely on module
-                    #self.arm.indicator_state()
                     solved = solvers[module].new(self.arm).solve()
                     state = self.arm.indicator_state()
                     if state == 0:
@@ -93,7 +104,7 @@ class Robot():
                     if state == 1:
                         log.info(f"Solved {module}")
                         self.draw_module(module_images["solved"], nonwhite=True)
-            self.arm.rclick(after=0.35)
+        if self.selected != -1: self.arm.rclick(after=0.35)
 
     def get_strikes(self):
         return self.strikes
@@ -112,8 +123,8 @@ class Robot():
         for dir, edge in self.arm.get_edges():
             warped = get_edge(edge, dir)
             if not warped is None:
-                dump_image(warped, dir="edges", starts=f"{dir}_")
-                display(warped, f"edge {dir}", wait_forever=False)
+              # dump_image(warped, dir="edges", starts=f"{dir}_")
+              # display(warped, f"edge {dir}", wait_forever=False)
                 hsv = cv2.cvtColor(warped, cv2.COLOR_BGR2HSV)
                 if batteries < 3:
                     bats = count_batteries(warped, hsv)
@@ -177,17 +188,28 @@ class Robot():
         self.drawer.draw_module(image, self.selected, nonwhite=nonwhite)
 
     def analyse_face(self):
-        sleep(0.3)
-        for i, label in enumerate(self.arm.scan_modules()):
+        sleep(0.5)
+        for i, label in enumerate(self.arm.scan_modules(True)):
             self.modules[self.face][i] = label
             self.draw()
     def analyse_bomb(self):
         #reset ourselves to a picked up, centred bomb with no module selected
         self.arm.wake_up()
+        sleep(0.5)
         self.analyse_face()
         self.flip_bomb()
+        self.arm.wake_up()
+        sleep(0.5)
         self.analyse_face()
+        self.flip_bomb()
         #print(f"active modules: {self.modules}")
+
+    def get_clock_pos(self):
+        try:
+            return self.modules[self.face].index("clock")
+        except ValueError:
+            log.debug(f"clock not found on face {self.face} | modules: {self.modules[self.face]}")
+            return -1
 
     def identify(self, do_show=False):
         claims = sorted(self.get_identity_claims(do_show))
@@ -250,8 +272,6 @@ def main():
     try:
         # print(1/0)
         r.peek()
-        cv2.waitKey(0)
-        return
         r.defuse_bomb()
     except:
         #stops random crashes leaving right click clicked
@@ -316,5 +336,10 @@ def test():
 
 
 if __name__ == "__main__":
-    test()
-    #main()
+    #test()
+    main()
+
+#TODO: draw clock
+#TODO: draw on identify
+#TODO: draw morse better
+#todo: detect dark and redlight

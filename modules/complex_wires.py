@@ -91,7 +91,7 @@ class ComplexWires():
         self.image = to_hsv(self.debug_image)
         self.wires = [0]*6
         self.leds = [0]*6
-        self.stars = [0]*6
+        self.stars = [WIRE.white]*6
         self.valid = False
         if not self.get_stars():
             return
@@ -159,7 +159,7 @@ class ComplexWires():
         for wire in indexes:
             log.info(f"Cutting wire {wire+1}")
             self.robot.moduleto(23+16*wire, 29)
-            self.robot.click(before=0.1,after=0.1) #before=0.2, after=0.2, dir = "complex")
+            self.robot.click(before=0.2,after=0.2, dir="complex") #before=0.2, after=0.2, dir = "complex")
         pass
 
     def get_cuts(self):
@@ -167,7 +167,7 @@ class ComplexWires():
             if wire == -1:
                 log.debug(f"no wire in position {i}")
                 continue
-            wire = wire + self.leds[i] + self.stars[i]
+            wire = wire + self.leds[i] + self.stars[i].value
             cut = cuts[wire]
             log.debug(f"{make_pretty(wire)}->{cut}")
             yield i, cut
@@ -178,26 +178,27 @@ class ComplexWires():
         (im, cnts, hierarchy) = cv2.findContours(mask
                                  ,cv2.RETR_CCOMP,cv2.CHAIN_APPROX_SIMPLE, offset=(0,120))
         x = 6
+        cnts = [Contour(cnt) for cnt in cnts]
         if not len(cnts):
             log.debug(f"found no terminals, not complex")
             self.debug_image=to_bgr(gray=mask)
             return False
-        for cnt, data in zip(cnts, hierarchy[0]):
-            #contours come from right to left, by rightmost pixel,
-            #so the box will always come before anything it contains
+        indexes = sorted(range(len(cnts)), key=lambda x: cnts[x].x, reverse=True)
+        for idx in indexes:
+            cnt, data = cnts[idx], hierarchy[0][idx]
             color = (0, 0, 255)
             if data[3] == -1:
                 x -= 1
+                print(f"complex: {x}: {cnt}")
                 if x < 0:
                     log.debug(f"found over 6 terminals")
                     return False
-                color = (0,255,0)
+                if data[2] != -1:
+                    self.stars[x] = WIRE.star
+                    color = (0,255,0)
+                cnt.draw(self.debug_image, color, detail_width=2)
             else:
-                if x == 6:
-                    log.debug(f"found contained before container")
-                    return False
-                self.stars[x] = WIRE.star.value
-            cv2.drawContours(self.debug_image, [cnt], -1, color,2)
+                cnt.draw(self.debug_image, (0,230,233))
             #draw_label(out, centrelabel=f"{x}")
         if x > 0:
             log.debug(f"only found {6-x} terminals")

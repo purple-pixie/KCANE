@@ -49,13 +49,13 @@ class Morse():
         cv2.rectangle(self.canvas, (20,10), (80,30), color)
         self.robot.draw_module(self.canvas)
     def solve(self):
-        solution = self.read_word(partial=True)
-        if solution is None:
-            solution = self.read_word(partial=False)
-        if solution is None:
+        solved, solution = self.read_word()
+        if not solved:
+            solved, solution = self.read_word(partial=solution)
+        if not solved:
             return False
         log.info(f"Word is: {solution}, changing frequency")
-        #word list is in order, so we just need to click on the > button based on its index in the array
+    #word list is in order, so we just need to click on the > button a number of times equal to its index in the array
         self.robot.moduleto(128,90)
         for i in range(words.index(solution)):
             self.robot.click(after=0.1)
@@ -69,10 +69,11 @@ class Morse():
         led = im[20:30,42:70]
         return np.sum(to_hsv(led)[...,2] > 150) > 200
 
-    def read_word(self, partial = True):
+    def read_word(self, partial = None):
         letters = ""
-        possibles = words.copy()
-        if partial:
+        possibles = [p for p in words if p.endswith(partial)] if partial else words.copy()
+        log.debug(f"retrying with letters {partial} | {possibles}")
+        if partial is None:
             #trash the first letter - we might have started listening half way through it
             trash = self.read_dots()
         else:
@@ -82,21 +83,21 @@ class Morse():
             dots = self.read_dots()
             if not len(dots):
                 log.debug("end-of-word read with no word decided")
-                return None
+                return False, letters
             else:
                 log.debug(f"{dots} - > {from_morse(dots)}")
                 letters += from_morse(dots)
-                if partial:
+                if partial is None:
                     possibles = [p for p in possibles if letters in p]
                 else:
-                    possibles = [p for p in possibles if p[:len(letters)] == letters]
+                    possibles = [p for p in possibles if p.startswith(letters)]
                 log.debug(f"{len(possibles)} matches for {letters}")
                 if len(possibles) == 0:
                     log.debug(f"ran out of possible matches for {letters}, aborting")
-                    return None
+                    return False, letters
                 if len(possibles) == 1:
                     log.debug(f"only one possible match for {letters}: {possibles[0]}")
-                    return possibles[0]
+                    return True, possibles[0]
 
     
     def read_dots(self):
