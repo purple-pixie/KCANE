@@ -196,8 +196,8 @@ class PasswordSolver():
         buttons = up_buttons if incr else down_buttons
         self.robot.moduleto(*buttons[pos])
         self.robot.click(after=after)
-        self.pointers[pos] = (self.pointers[pos] + (1 if incr else -1)) % 6
         self.draw()
+        self.pointers[pos] = (self.pointers[pos] + (1 if incr else -1)) % 6
     def seek_letter(self, pos, char):
         """cycle letter at position pos until it shows char
         uses knowledge of the letters in that wheel if present, otherwise identifies letters on the fly"""

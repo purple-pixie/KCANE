@@ -1,6 +1,7 @@
 
 from util import *
-from matplotlib import pyplot as plt
+import logging
+log = logging.getLogger(__name__)
 
 def get_segments(image):
     for state in False, True:
@@ -23,7 +24,7 @@ def get_segments_by_state(image, lit = True):
         cnt = Contour(cnt)
         #small edge ~5
         #long edge ~10 or ~17
-        if (3 < cnt.w < 7 and 14 < cnt.h < 30) or (2 < cnt.h < 6 and 8 < cnt.w < 14):
+        if (3 < cnt.w < 7 and 14 < cnt.h < 30) or (2 < cnt.h < 6 and 6 < cnt.w < 14):
             yield lit, cnt
         #else: print(cnt)
 
@@ -61,10 +62,12 @@ def isClock(image):
     #     x1, y1 = cnt[0][0] * 4
     #     draw_label(canvas, (x1, y1 - 40), f"{i}", color=(0, 0, 0))
     # actual isClock:
-    display(image, "clock_", wait_forever=False)
-    time.sleep(0.5)
-    dump_image(image, dir="clock", starts=f"length {len(list(get_segments(image)))}_")
-    return len(list(get_segments(image))) == 28
+    #display(image, "clock_", wait_forever=False)
+    #time.sleep(0.5)
+    #dump_image(image, dir="clock", starts=f"length {len(list(get_segments(image)))}_")
+    segs = list(get_segments(image))
+    log.debug(f"{len(segs)} lcd-segments found")
+    return len(segs) == 28
 
 def read_clock(image):
     #get all 28 segments (7 per digit) and sort them by x-coord
@@ -75,7 +78,8 @@ def read_clock(image):
         segments = segments.reshape((4,7,2))
     except ValueError:
         #can't reshape to 4,7,2 means it wasn't 28,2 so we haven't found a good LCD
-        return ""
+        return "", None
+
     #drawing fluff
     canvas = np.full(image.shape, 120, "uint8")
     for digit in segments:
@@ -83,11 +87,11 @@ def read_clock(image):
             if state:
                 cnt.draw(canvas, detail_color=(0,0,255), detail_width=-1)
             else:
-                cnt.draw(canvas, detail_color=(0,0,0))
-        dump = np.hstack((canvas, image))
+                cnt.draw(canvas, detail_color=(50,50,50))
+        #dump = np.hstack((canvas, image))
         #print(f"digit is: {get_digit(digit)}")
         #display(dump)
     output =f"{get_digit(segments[0])}{get_digit(segments[1])}:{get_digit(segments[2])}{get_digit(segments[3])}"
-    print(output)
-    display(image)
-    return output
+    #print(output)
+    #display(image)
+    return output, canvas

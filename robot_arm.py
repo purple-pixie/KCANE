@@ -121,6 +121,8 @@ class RobotArm:
         dir 4 and 5 rotate 180 degrees left and right"""
         if self.robot.safe: return
         self.mouse_to_centre()
+        mouse.release(Button.right)
+        sleep(0.05)
         mouse.press(Button.right)
         #allow game to realise we've clicked
         sleep(0.05)
@@ -159,7 +161,7 @@ class RobotArm:
 
     def pick_up(self):
         self.mouse_to_centre()
-        self.click(0, 0.25)
+        self.click(0, 1)
 
     def mouse_position(self):
         return self.screen.scaled_coords(*mouse.position)
@@ -183,12 +185,12 @@ class RobotArm:
         y = 300 + (d_y-c_y) * 200
         x = min(max(x, 75), 725)
         self.mouseto(x, y)
-        self.click(0, after)
+        self.click(0, after, skip_test = True)
         self.selected = desired
 
     def goto(self, mod, after = 1):
         self.mouse_to_module(mod)
-        self.click(0, after)
+        self.click(0, after, skip_test = True)
         self.selected = mod
         #move to the middle of the focus tile
         #self.mouse_to_centre()
@@ -198,12 +200,47 @@ class RobotArm:
     def grab(self, colour = True, allow_dark = False, allow_red = False):
         #todo: lights out / red light check
         im = self.screen.grab()
+        while not self.validate(im, allow_dark, allow_red):
+            im = self.screen.grab()
         if not colour:
             if len(im.shape) > 2:
                 return cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
         return im
 
+    def validate(self, image, allow_dark, allow_red):
+        """validate that image is not dark or red-lit, as required"""
+        if allow_dark and allow_red:
+            return True
 
+        # redlight - sanitize and check a non-bomb region (top ~20 pixels should be safe),
+        #  if 0 (or nearly) pixels are below 176 hue then it's red light
+        # dark - topright corner if everything value < 35 it's dark
+        # top left if everything value < 20
+        # decide corner from selected
+        # if left-most module selected, grab the top-right corner, else top-left
+        if self.selected in (0,3):
+            region = image[-20:,:20]
+            thresh = 35
+        else:
+            region = image[:20, :20]
+            thresh = 20
+        hsv = to_hsv(region)
+        if not allow_dark:
+            bright_count = np.sum(hsv[...,2] > thresh)
+            if bright_count < 10:
+              #  print("dark image disallowed")
+                return False
+
+        if not allow_red:
+            #sanitize
+            hues = hsv[...,0]
+            reds = hues < 5
+            hues[reds] = 179
+            nonred_count = np.sum(hues < 176)
+            if nonred_count < 20:
+             #   print("red image disallowed")
+                return False
+        return True
 
     def grab_other_module(self, desired):
         """grab module at pos, assuming we are looking at current and want desired"""
@@ -219,7 +256,7 @@ class RobotArm:
         y1 = selected_top + pad_y * (d_y - c_y)
         y2 = selected_bot + pad_y * (d_y - c_y)
 
-        return self.grab()[y1:y2, x1:x2]
+        return self.grab()[max(0, y1):y2, max(0, x1):x2]
 
     def grab_module_unfocused(self, pos):
         """grab module at position pos (0-5) assuming no module currently selected"""
@@ -240,12 +277,12 @@ class RobotArm:
             im = im[selected_top:selected_bot,
                    selected_left:selected_right]
         #special case for loading screens that are already cropped to selected region
-        #(or at least to the right height, assume there might be more junk hstack()ed on afterwards
+        #(or at least to the right height, assume there might be more junk hstack()ed on afterwards)
         if im.shape[0] == selected_bot-selected_top:
             im = im[:,:selected_right-selected_left]
         return im
 
-    def click(self, before=0., after=0., button=Button.left, between = 0., dir = None):
+    def click(self, before=0., after=0., button=Button.left, between = 0., dir = None, skip_test = False):
         if self.robot.safe: return sleep(after)
         if not dir is None:
             dump_image(self.grab_selected(),dir=dir,starts="pre_sleep")
@@ -257,13 +294,18 @@ class RobotArm:
         if between:
             sleep(between)
         mouse.release(button)
+        if not skip_test:
+            if self.indicator_state() < 0:
+                self.robot.strikes += 1
+                raise StrikeException
         if after:
             sleep(after)
         if not dir is None:
             dump_image(self.grab_selected(),dir=dir,starts="post_click")
     def rclick(self, **kwargs):
         self.selected = -1
-        self.click(button=Button.right, **kwargs)
+        self.click(button=Button.right, skip_test=True, **kwargs)
 
     def draw_module(self, image):
         self.robot.draw_module(image)
+

@@ -50,7 +50,9 @@ class Button():
             self.text = "PRESS" if len(letters[0]) > 25 else "ABORT"
 
     def solve(self):
+        #DEBUG this is why buttons don't solve atm
         log.debug(f"defusing | {self}")
+        return False
         release = self.is_press_release()
         if release:
             print("Press and Release")
@@ -58,6 +60,14 @@ class Button():
             self.robot.click(before=0.1, between=0.1)
         else:
             print("Press and hold")
+            clock = self.robot.robot.get_clock_reading()
+            print(f"#### clock; {clock} ####")
+            self.robot.mouse_to_centre()
+            x, y = self.robot.mouse_position()
+            while clock == "":
+                self.robot.rotate(x=x+random.randrange(-30,30,2), y=y)
+                clock = self.robot.robot.get_clock_reading()
+                print(".",end="",sep="")
             #TODO: actually solve this
 
 

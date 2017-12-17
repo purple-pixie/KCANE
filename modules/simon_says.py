@@ -137,33 +137,32 @@ class SimonSays():
         log.debug(f"Sequence: {sequence}")
         for i, color in enumerate(sequence):
             self.robot.moduleto(*button_regions[color.value])
-            self.robot.click(before=0.1 if i else 0.5) #, after=0.1)
+            self.robot.click(before=0.3 if i else 0.5) #, after=0.1)
         return True
     def solve(self, retry = True):
         self.canvas = np.full((170, 170, 3), 120, dtype="uint8")
         #TODO: remember that the solution should match the last stage plus a move
         #or ditch the whole stage thing? could pick up half solved runs
         for stage in range(6):
-            if self.solve_stage(stage) is None:
-                if not self.solve_stage(stage):
-                    break
-            log.debug(f"solve pre-stage nap")
-            robot_arm.sleep(0.2)
-            indicator = to_hsv(self.robot.grab_selected()[:23 , 130:])
-            green = inRangePairs(indicator, [(58, 74), (222, 255), (204, 251)])
-            red = inRangePairs(indicator, [(167, 179), (175, 255), (208, 255)]) # red indicator#
-            if np.sum(green) > 2550:
-                log.debug("woo, it's solved")
-                return True
-            if np.sum(red) > 2550:
-                if retry:
-                    log.info("I screwed up. Assuming the serial was wrong and restarting.")
-                    self.robot.robot.serial_vowel_error()
-                    robot_arm.sleep(2)
-                    return self.solve(retry=False)
-                else:
-                    log.info("I really screwed up, aborting")
-                    return False
+            try:
+                if self.solve_stage(stage) is None:
+                    if not self.solve_stage(stage):
+                        break
+                log.debug(f"solve pre-stage nap")
+                robot_arm.sleep(0.2)
+                indicator = self.robot.indicator_state()
+                if indicator == 1:
+                    log.debug("woo, simon solved")
+                    return True
+            except StrikeException:
+                    if retry:
+                        log.info("I screwed up. Assuming the serial was wrong and restarting.")
+                        self.robot.robot.serial_vowel_error()
+                        robot_arm.sleep(1)
+                        return self.solve(retry=False)
+                    else:
+                        log.info("I really screwed up, aborting")
+                        raise
             log.debug(f"solve post-stage sleep")
             robot_arm.sleep(.5)
         else:

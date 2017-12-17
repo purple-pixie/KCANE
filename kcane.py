@@ -4,8 +4,8 @@ from robot_arm import RobotArm, sleep
 from util import *
 from modules import solvers
 from bomb_drawer import BombDrawer
-import logging
 import clock
+import logging
 logging.basicConfig(filename='KCANE.log', filemode='w', level=logging.DEBUG) #, format='%(asctime)s.%(msecs)03d %(message)s')
 log = logging.getLogger(__name__)
 log.info("started")
@@ -27,6 +27,13 @@ class Robot():
         self.serial_vowel = False
         self.strikes = 0
 
+    def __repr__(self):
+        all_modules = list(itertools.chain.from_iterable(self.modules))
+        solved = all_modules.count("solved")
+        unknown = all_modules.count("unidentified")
+        unsolved = [mod for mod in all_modules if mod not in ("unidentified", "solved", "unknown")]
+        return f"Robot - {solved} solved, {unknown} unidentified. Unsolved: {unsolved}"
+
     def peek(self):
         self.examine_gubbins()
         self.analyse_bomb()
@@ -44,13 +51,35 @@ class Robot():
         #sleep(1)
 
     def defuse_bomb(self):
+        self.examine_gubbins()
         self.defuse_face()
         ##test for already winning?
         self.flip_bomb()
         self.defuse_face()
         self.flip_bomb()
 
+    def get_clock_reading(self):
+        clock_pos = self.get_clock_pos()
+        if clock_pos != -1:
+            c_x = clock_pos % 3
+            x = self.selected % 3
+            try:
+                im = self.arm.grab_other_module(clock_pos)
+                reading, image = clock.read_clock(im)
+                display(hstack_pad(im, image), "clock" , wait_forever=False)
+                print(f"reads: {reading}")
+                self.draw_module(image, on_module=clock_pos)
+                return reading
+            except cv2.error:
+                log.debug(f"cv2 failed to read clock {c_x} from {x}")
+                return ""
+            except AttributeError:
+                log.debug(f"failed to read clock {c_x} from {x}")
+                return ""
+        return ""
+
     def defuse_face(self):
+        self.analyse_face()
         self.selected = -1
         active = [pos for pos, mod in enumerate(self.modules[self.face]) if mod not in ("empty", "clock")]
         for pos in active:
@@ -61,16 +90,6 @@ class Robot():
             self.selected = pos
 
             #CLOCK STUFF DEBUG#
-            clock_pos = self.get_clock_pos()
-            if clock_pos != -1:
-                c_x = clock_pos % 3
-                x = self.selected % 3
-                try:
-                    im = self.arm.grab_other_module(clock_pos)
-                    print(clock.read_clock(im))
-                    display(im, "clock", wait_forever=False)
-                except cv2.error:
-                    print(f"failed to read clock {c_x} from {x}")
 
             #ENDCLOCK
 
@@ -83,13 +102,18 @@ class Robot():
             if module is None:
                 print("Still not sure what this is. Skipping")
                 self.draw_module(module_images["unknown"], nonwhite=True)
-                #dump_image(self.arm.grab_selected())
+                dump_image(self.arm.grab_selected(), "whos")
             else:
+                self.modules[self.face][pos] = module
                 if module == "solved":
                     print(f"Already solved, ignoring")
+                    self.draw_module(module_images["solved"], nonwhite=True)
                 else:
                     print(f"Looks like {module}. Defusing")
-                    solved = solvers[module].new(self.arm).solve()
+                    try:
+                        solved = solvers[module].new(self.arm).solve()
+                    except StrikeException:
+                        log.warning(f"struck out on {module}")
                     state = self.arm.indicator_state()
                     if state == 0:
                         #if state initially gray, try sleeping for a bit and testing again
@@ -97,12 +121,13 @@ class Robot():
                         state = self.arm.indicator_state()
                     if state == -1:
                         log.warning(f"Struck out on {module}!")
-                        self.strikes += 1
+                        #self.strikes += 1
                         self.draw_module(module_images["failed"], nonwhite=True)
                     if state == 0:
                         log.info(f"Module {module} says solved but module is unfinished")
                     if state == 1:
                         log.info(f"Solved {module}")
+                        self.modules[self.face][pos] = "solved"
                         self.draw_module(module_images["solved"], nonwhite=True)
         if self.selected != -1: self.arm.rclick(after=0.35)
 
@@ -158,11 +183,10 @@ class Robot():
 
     def serial_digit_error(self, made_error = False):
         self.serial_odd = not self.serial_odd
-        self.strikes += made_error
+        #self.strikes += made_error
 
     def serial_vowel_error(self):
         self.serial_vowel = not self.serial_vowel
-        self.strikes += 1
 
     def serial_is_odd(self):
         log.info("checking oddity")
@@ -184,12 +208,14 @@ class Robot():
     def draw(self):
         self.drawer.draw()
 
-    def draw_module(self, image, nonwhite = False):
-        self.drawer.draw_module(image, self.selected, nonwhite=nonwhite)
+    def draw_module(self, image, nonwhite = False, on_module = None):
+        if on_module is None:
+            on_module = self.selected
+        self.drawer.draw_module(image, on_module, nonwhite=nonwhite)
 
     def analyse_face(self):
         sleep(0.5)
-        for i, label in enumerate(self.arm.scan_modules(True)):
+        for i, label in enumerate(self.arm.scan_modules()):
             self.modules[self.face][i] = label
             self.draw()
     def analyse_bomb(self):
@@ -267,17 +293,20 @@ class Robot():
 def main():
     s = screen.Screen(2)
     r = Robot(s)
+    print(r)
     #r.watch()
     #  r.defuse_bomb()
     try:
         # print(1/0)
-        r.peek()
+        #r.peek()
         r.defuse_bomb()
     except:
         #stops random crashes leaving right click clicked
         #mouse was inited before the try so it shouldn't be causing IO errors during the except
         robot_arm.mouse.release(robot_arm.Button.right)
+        print(r)
         raise
+    print(r)
     #p.solve()
     #r.panic("test/")
 
@@ -287,15 +316,59 @@ def main():
 from bomb_examiner import *
 
 def test():
-    #s = screen.Screen(image_path="img2.bmp")
-    #if 1:
-    for im in images_in("dump/screens/", starts="unf"):
+  # s = screen.Screen(image_path="dump/clock/theta_-30_0.bmp")
+  # #if 1:
+  # r=Robot(s)
+  # r.arm.selected = 5
+  # r.modules[0][3]="clock"
+  # r.selected = 5
+  # print(r.get_clock_reading())
+  # print(clock.isClock(r.arm.grab_other_module(3)))
+  # display(r.arm.grab_other_module(3)) #,scale=3)
+  # disp, im = clock.read_clock(r.arm.grab_other_module(3))
+  # print(disp)
+  # display(im)
+    s=screen.Screen(2)
+    r=Robot(s)
+    while 1:
+        display(r.arm.grab(), wait_forever=False)
+ # r.arm.wake_up()
+ # sleep(0.5)
+ # r.arm.goto(5)
+ # sleep(1)
+ # for i in range(-50, 51, 20):
+ #     r.arm.mouse_to_centre()
+ #     robot_arm.mouse.press(robot_arm.Button.right)
+ #     sleep(0.05)
+ #     x, y = r.arm.mouse_position()
+ #     r.arm.mouseto(x+i, y)
+ #     sleep(2)
+ #     s.save_screen(dir="clock", starts=f"theta_{i}_")
+ #     r.arm.mouse_to_centre()
+ #     robot_arm.mouse.release(robot_arm.Button.right)
+ #     sleep(2)
+ # return
+  # r.modules[0][2]="clock"
+  # r.selected = 1
+  # r.arm.selected = 1
+  # solvers["button"].new(r.arm).solve()
+  # #solvers["symbols"].new(r.arm).train()
+  # #dump_image(r.arm.grab_selected(), "whos")
+  # dump_image(r.arm.grab_selected(), "symbols")
+  # return
+
+    #TODO: capture and label { 'Ҋ', }
+
+    for im in images_in("dump/whos/", starts=""):
         #fake = screen.Screen(image_path="dump/watched/img49.bmp")
         #fake = screen.Screen(image_path="dump/test/img38.bmp")
         fake = screen.Screen(image=im)
         r = Robot(fake, safe=True)
         arm = r.arm
-        list(arm.scan_modules())
+        r.identify(False)
+        #solvers["symbols"].train(arm)
+        #solvers["symbols"].train(arm)
+        #list(arm.scan_modules())
         #img = arm.grab_module_unfocused(3)
         #import clock
         #clock.isClock(img)
@@ -334,12 +407,14 @@ def test():
         #continue
 
 
+#TODO: draw clock
+#todo: clean serial some more - stip off bottom two rows to remove the white line?
+#TODO: draw on identify
+#TODO: draw morse better
+#todo: detect dark and redlight
+
+
 
 if __name__ == "__main__":
     #test()
     main()
-
-#TODO: draw clock
-#TODO: draw on identify
-#TODO: draw morse better
-#todo: detect dark and redlight

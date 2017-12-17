@@ -89,7 +89,7 @@ class ComplexWires():
         self.robot = robot
         self.debug_image = robot.grab_selected().copy()
         self.image = to_hsv(self.debug_image)
-        self.wires = [0]*6
+        self.wires = [-1]*6
         self.leds = [0]*6
         self.stars = [WIRE.white]*6
         self.valid = False
@@ -159,7 +159,7 @@ class ComplexWires():
         for wire in indexes:
             log.info(f"Cutting wire {wire+1}")
             self.robot.moduleto(23+16*wire, 29)
-            self.robot.click(before=0.2,after=0.2, dir="complex") #before=0.2, after=0.2, dir = "complex")
+            self.robot.click(before=0.2,after=0.2)
         pass
 
     def get_cuts(self):
@@ -189,7 +189,6 @@ class ComplexWires():
             color = (0, 0, 255)
             if data[3] == -1:
                 x -= 1
-                print(f"complex: {x}: {cnt}")
                 if x < 0:
                     log.debug(f"found over 6 terminals")
                     return False

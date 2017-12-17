@@ -26,7 +26,7 @@ morse_english_dict = {'.-': 'A', '-...': 'B', '-.-.': 'C',
 words = [str.upper(x) for x in ("shell", "halls", "slick", "trick", "boxes", "leaks", "strobe", "bistro", "flick", "bombs", "break",
          "brick", "steak", "sting", "vector", "beats")]
 
-letters=set("".join(words))
+#letters=set("".join(words))
 
 def from_morse(dots):
     return morse_english_dict.get(dots, f"<{dots}>")
@@ -34,18 +34,24 @@ def from_morse(dots):
 class Morse():
     def __init__(self, robot:RobotArm):
         self.robot = robot
-        self.canvas = np.full((100,100,3),120,"uint8")
+        self.canvas = np.full((150,200,3),120,"uint8")
     #TODO: draw morse
+
+    def draw_letters(self, letters, stage):
+        cv2.rectangle(self.canvas, (0,90 + stage * 20), (99,110 + stage * 20),(120,120,120), -1)
+        draw_label(self.canvas, (50,100 + stage * 20), ",".join(letters))
+        self.robot.draw_module(self.canvas)
+
 
     def draw_dots(self,dots):
         cv2.rectangle(self.canvas, (0,60), (99,80),(120,120,120), -1)
-        draw_label(self.canvas, (50,70), f"{dots}: {morse_english_dict.get(dots, '?')}")
+        draw_label(self.canvas, (50,70), f"{dots}", font_scale=1)
         self.robot.draw_module(self.canvas)
 
     def draw_state(self, state):
         color = (20,230,230) if state else (120,120,120)
         c2 = (20,180,180) if state else (120,120,120)
-        cv2.circle(self.canvas, (50,20), 30, c2, -1)
+        cv2.circle(self.canvas, (50,20), 15, c2, -1)
         cv2.rectangle(self.canvas, (20,10), (80,30), color)
         self.robot.draw_module(self.canvas)
     def solve(self):
@@ -77,26 +83,36 @@ class Morse():
             #trash the first letter - we might have started listening half way through it
             trash = self.read_dots()
         else:
+            if len(possibles) == 1:
+                log.debug(f"only one possible match for ...{partial}: {possibles[0]}")
+                return True, possibles[0]
+
             #drop the whole end-of-word pause
             trash = self.read_statechange()
-        while "True":
+        while "reading letters":
             dots = self.read_dots()
             if not len(dots):
                 log.debug("end-of-word read with no word decided")
                 return False, letters
             else:
-                log.debug(f"{dots} - > {from_morse(dots)}")
-                letters += from_morse(dots)
+                letter = from_morse(dots)
+                log.debug(f"{dots} - > {letter}")
+                letters += letter
+                self.draw_letters(letters, partial is None)
                 if partial is None:
                     possibles = [p for p in possibles if letters in p]
                 else:
                     possibles = [p for p in possibles if p.startswith(letters)]
                 log.debug(f"{len(possibles)} matches for {letters}")
                 if len(possibles) == 0:
+                    #this shouldn't happen unless we've misread something
                     log.debug(f"ran out of possible matches for {letters}, aborting")
                     return False, letters
                 if len(possibles) == 1:
-                    log.debug(f"only one possible match for {letters}: {possibles[0]}")
+                    mask = letters
+                    if partial is not None:
+                        mask = f"{letters} ... {partial}"
+                    log.debug(f"only one possible match for {mask}: {possibles[0]}")
                     return True, possibles[0]
 
     

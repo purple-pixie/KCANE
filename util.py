@@ -14,6 +14,10 @@ import sys
 import inspect
 import numpy as np
 
+class StrikeException(Exception):
+    """Raised when a solver causes a strike"""
+    pass
+
 def auto_canny(image, sigma=0.33):
     v = np.median(image)
     lower = int(max(0, (1.0 - sigma) * v))
@@ -31,10 +35,11 @@ class PrintSnooper:
         self.stdout.write(s[:100])
         self.stdout.write("\n")
 #sys.stdout = PrintSnooper(sys.stdout)
-def images_in(dir = "", flags=1, ext = ".bmp", return_names = False, return_full_names = False, starts = ""):
+def images_in(dir = "", flags=1, ext = ".bmp", return_names = False, return_full_names = False,
+              dont_open = False, starts = ""):
     starts = os.path.join(dir, starts)
     for name in glob.glob(f"{starts}*{ext}"):
-        im = cv2.imread(name, flags)
+        im = None if dont_open else cv2.imread(name, flags)
         if return_full_names: yield name, im
         elif return_names: yield naked_filename(name), im
         else: yield im
@@ -51,11 +56,15 @@ def read_key(directions = True):
                         ):  # up, down, left, right
                 return key
     return key&0xFF
-def hstack_pad(a, b):
+def hstack_pad(a, b=None):
+    if b is None:
+        return a
     if a is None or a.shape[0] == 0:
         return b.copy()
     if a.shape[0] == b.shape[0]:
         return np.hstack((a,b))
+    if a.shape[0] <= b.shape[0]:
+        return hstack_pad(b, a)
     pad = a.shape[0] - b.shape[0]
     padded = np.pad(b,((pad,0),(0,0), (0,0)),mode="constant")
     return np.hstack((a,padded))
